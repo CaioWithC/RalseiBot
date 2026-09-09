@@ -2,6 +2,7 @@
 import asyncio
 from io import BytesIO
 import re
+import time
 import warnings
 
 import nextcord
@@ -96,7 +97,21 @@ def wrap_text(draw, text, face, width):
     return lines
 
 
-def render_profile(profile, name, avatar=None):
+def marriage_duration(married_at):
+    elapsed = max(0, int(time.time()) - married_at)
+    days, remaining = divmod(elapsed, 86400)
+    hours, remaining = divmod(remaining, 3600)
+    minutes = remaining // 60
+    if days:
+        return f"{days} {'dia' if days == 1 else 'dias'} e {hours} h juntos"
+    if hours:
+        return f"{hours} h e {minutes} min juntos"
+    if minutes:
+        return f"{minutes} min juntos"
+    return "Menos de 1 min juntos"
+
+
+def render_profile(profile, name, avatar=None, marriage=None):
     color = profile["color"]
     foreground = text_color(color)
     canvas = Image.new("RGB", (WIDTH, HEIGHT), color)
@@ -123,11 +138,19 @@ def render_profile(profile, name, avatar=None):
         draw.text((99, 96), initial, font=font(60, True), fill=color, anchor="mm")
     draw.text((196, 29), "PERFIL", font=font(15, True), fill=foreground)
     draw_fitted(draw, (193, 55), name, 39, 470, foreground, True)
-    draw_fitted(draw, (196, 109), f"UID: {profile['discord_id']}", 18, 475, foreground)
+    draw_fitted(draw, (196, 109), f"UID: {profile['discord_id']}", 18,
+                290 if marriage else 475, foreground)
     draw.text((714, 32), "RANK EM r.rich", font=font(16, True), fill=foreground)
     draw_fitted(draw, (710, 55), f"#{profile['rank']:,}", 34, 256, foreground, True)
-    draw.text((714, 113), "DARKMONEY", font=font(15, True), fill=foreground)
-    draw_fitted(draw, (711, 138), f"{profile['balance']:,}", 26, 257, foreground, True)
+    balance_x = 506 if marriage else 711
+    draw.text((balance_x + 3, 113), "DARKMONEY", font=font(15, True), fill=foreground)
+    draw_fitted(draw, (balance_x, 138), f"{profile['balance']:,}", 26,
+                180 if marriage else 257, foreground, True)
+    if marriage:
+        draw.text((710, 103), "Casado com", font=font(16), fill=foreground)
+        draw_fitted(draw, (710, 130), marriage["spouse_name"], 26, 258, foreground)
+        draw_fitted(draw, (710, 158), marriage_duration(marriage["married_at"]),
+                    13, 258, foreground)
 
     if profile["background"]:
         with Image.open(BytesIO(profile["background"])) as background:
@@ -175,6 +198,17 @@ class Social(commands.Cog):
         if ctx.guild:
             target = ctx.guild.get_member(target.id) or target
         data = self.storage.profile(target.id)
+        marriage = self.storage.marriage(target.id)
+        if marriage:
+            spouse_id = int(marriage["second_id"] if str(target.id) == marriage["first_id"]
+                            else marriage["first_id"])
+            spouse = (ctx.guild.get_member(spouse_id) if ctx.guild else None) or self.bot.get_user(spouse_id)
+            if spouse is None:
+                try:
+                    spouse = await asyncio.wait_for(self.bot.fetch_user(spouse_id), timeout=10)
+                except (nextcord.HTTPException, asyncio.TimeoutError):
+                    pass
+            marriage["spouse_name"] = f"@{spouse.name}" if spouse else f"UID: {spouse_id}"
         avatar = None
         async with self.image_jobs:
             try:
@@ -182,7 +216,7 @@ class Social(commands.Cog):
                 avatar = await asyncio.wait_for(asset.read(), timeout=10)
             except (nextcord.HTTPException, asyncio.TimeoutError):
                 pass  # A failed avatar download still produces a usable profile.
-            output = await asyncio.to_thread(render_profile, data, target.display_name, avatar)
+            output = await asyncio.to_thread(render_profile, data, target.display_name, avatar, marriage)
         try:
             await ctx.send(file=nextcord.File(output, filename="profile.png"))
         finally:
