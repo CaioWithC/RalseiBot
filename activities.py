@@ -36,23 +36,6 @@ ACTIVITIES = (
     "💰 DarkMoney, diversão e amigos. Esse é o meu reino!",
 )
 
-ADMIN_REACTIONS = {
-    "addbalance": "💰 {admin} distribuiu DarkMoney. Obrigado por cuidar da turma!",
-    "setbalance": "⚖️ {admin} organizou a economia do reino!",
-    "resetbalance": "🧹 {admin} ajustou um saldo. Prontos para recomeçar!",
-    "pay": "🤝 {admin} espalhou DarkMoney pelo reino!",
-    "daily": "🎁 Recompensa diária entregue a {admin}!",
-    "work": "🛠️ Até a administração trabalha! Bom trabalho, {admin}!",
-    "rich": "🏆 {admin} está de olho no ranking de DarkMoney!",
-    "slots": "🎰 {admin} girou os rolos. A sorte está lançada!",
-    "blackjack": "🃏 {admin} entrou na mesa de blackjack!",
-    "mines": "💣 {admin} iniciou mines. Cuidado onde pisa!",
-    "profile": "🧣 {admin} veio conferir os perfis do reino!",
-    "profile color": "🎨 {admin} deu uma nova cor ao próprio perfil!",
-    "profile about": "📝 {admin} renovou o Sobre mim!",
-    "profile background": "🖼️ {admin} personalizou o fundo do perfil!",
-}
-
 
 def one_line(text):
     return " ".join(text.split())
@@ -163,9 +146,6 @@ class Activities(commands.Cog):
         name = ctx.command.qualified_name
         admin = one_line(ctx.author.display_name)[:40]
         command = f"/{slash_name(ctx.command)}" if getattr(ctx, "interaction", None) else f"r.{name}"
-        template = ADMIN_REACTIONS.get(name, "🛡️ {admin} usou {command}. Missão cumprida!")
-        self.override = ActivityOverride(status_text(template.format(admin=admin, command=command)),
-                                         now + ADMIN_REACTION_SECONDS)
 
     @commands.command(cls=DualCommand, aliases=["atividade", "status"],
                       help="Administrador: r.activity <texto de até 128 caracteres> por 5 minutos. Use reset para retomar a rotação.")

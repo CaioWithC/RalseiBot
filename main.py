@@ -42,7 +42,7 @@ def create_bot():
     intents.message_content = True
     bot = commands.Bot(command_prefix="r.", intents=intents, help_command=None,
                        allowed_mentions=nextcord.AllowedMentions.none())
-    for extension in ("economy", "leaderboard", "games", "social", "activities", "marriage", "sendmessage", "tickets"):
+    for extension in ("economy", "leaderboard", "games", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets"):
         bot.load_extension(extension)
 
     @bot.event
@@ -76,6 +76,9 @@ def create_bot():
                                  "Veja detalhes com `r.help mines` ou `/help command:mines`.\n"
                                  "Os aliases continuam disponíveis com o prefixo r.; cooldowns são compartilhados.")
             for target in sorted(bot.walk_commands(), key=lambda item: item.qualified_name):
+                if len(embed.fields) == 25:
+                    await ctx.send(embed=embed)
+                    embed = nextcord.Embed(title="Comandos do Ralsei (continuação)", color=0x77E5BC)
                 embed.add_field(name=f"r.{target.qualified_name} · /{slash_name(target)}",
                                 value=target.short_doc[:200] or "Veja a ajuda do comando.", inline=False)
         await ctx.send(embed=embed)

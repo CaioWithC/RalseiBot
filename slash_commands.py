@@ -53,6 +53,21 @@ class SlashCommands(commands.Cog):
                          channel_types=[nextcord.ChannelType.category])):
         await self.invoke(interaction, "ticket", category=category)
 
+    @nextcord.slash_command(name="kiss", description="Beije alguém com um GIF.", contexts=GUILD_ONLY)
+    async def kiss(self, interaction: nextcord.Interaction,
+                   member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá o beijo.")):
+        await self.invoke(interaction, "kiss", member=member)
+
+    @nextcord.slash_command(name="hug", description="Abrace alguém com um GIF.", contexts=GUILD_ONLY)
+    async def hug(self, interaction: nextcord.Interaction,
+                  member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá o abraço.")):
+        await self.invoke(interaction, "hug", member=member)
+
+    @nextcord.slash_command(name="pat", description="Faça carinho em alguém com um GIF.", contexts=GUILD_ONLY)
+    async def pat(self, interaction: nextcord.Interaction,
+                  member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá o carinho.")):
+        await self.invoke(interaction, "pat", member=member)
+
     @nextcord.slash_command(name="balance", description="Mostra seu saldo em DarkMoney.")
     async def balance(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "balance")

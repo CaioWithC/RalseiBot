@@ -94,6 +94,12 @@ class Marriage(Base):
     married_at = Column(Integer, nullable=False)
 
 
+class MarriageAffinity(Base):
+    __tablename__ = "marriage_affinity"
+    marriage_id = Column(String, primary_key=True)
+    points = Column(Integer, nullable=False, default=0)
+
+
 class TicketConfig(Base):
     __tablename__ = "ticket_configs"
     guild_id = Column(String, primary_key=True)
@@ -311,7 +317,7 @@ class Database:
             married_at = int(time.time() if now is None else now)
             session.add(Marriage(id=uuid.uuid4().hex, first_id=first_id,
                                  second_id=second_id, married_at=married_at))
-            return {"first_id": first_id, "second_id": second_id, "married_at": married_at}
+            return {"first_id": first_id, "second_id": second_id, "married_at": married_at, "affinity": 0}
 
     def marriage(self, discord_id):
         with Session(self.engine) as session:
@@ -319,8 +325,26 @@ class Database:
                 Marriage.first_id == str(discord_id), Marriage.second_id == str(discord_id))))
             if marriage is None:
                 return None
+            affinity = session.get(MarriageAffinity, marriage.id)
             return {"first_id": marriage.first_id, "second_id": marriage.second_id,
-                    "married_at": marriage.married_at}
+                    "married_at": marriage.married_at, "affinity": affinity.points if affinity else 0}
+
+    def add_marriage_affinity(self, first_id, second_id, points):
+        """Award points atomically only when these two people are married."""
+        if type(points) is not int or not 1 <= points <= 3:
+            raise EconomyError("A afinidade deve aumentar entre 1 e 3 pontos.")
+        first_id, second_id = self.pair(first_id, second_id)
+        with self.transaction() as session:
+            marriage = session.scalar(select(Marriage).where(
+                Marriage.first_id == first_id, Marriage.second_id == second_id))
+            if marriage is None:
+                return 0
+            affinity = session.get(MarriageAffinity, marriage.id)
+            if affinity is None:
+                session.add(MarriageAffinity(marriage_id=marriage.id, points=points))
+            else:
+                affinity.points += points
+            return points
 
     def configure_tickets(self, guild_id, category_id):
         with self.transaction() as session:

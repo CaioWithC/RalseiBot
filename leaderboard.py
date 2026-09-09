@@ -13,7 +13,7 @@ from command_support import DualCommand
 MAX_IMAGE_PIXELS = 16_000_000
 
 def font(size, bold=False):
-    filename = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+    filename = "arialbd.ttf" if bold else "arial.ttf"
     windows = Path("C:/Windows/Fonts") / ("arialbd.ttf" if bold else "arial.ttf")
     for candidate in (filename, str(windows)):
         try:

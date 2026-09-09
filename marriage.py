@@ -14,7 +14,7 @@ from leaderboard import font, fit
 from social import MAX_IMAGE_PIXELS
 
 log = logging.getLogger(__name__)
-PINK = 0xF29FB5
+PINK = 0xCF59FF
 PROPOSAL_TIMEOUT = 120
 SHIP_WIDTH, SHIP_HEIGHT = 1000, 680
 
@@ -25,6 +25,7 @@ def marriage_embed(record):
                           description=f"<@{record['first_id']}> 💞 <@{record['second_id']}>")
     embed.add_field(name="Data do casamento", value=f"<t:{timestamp}:F>", inline=False)
     embed.add_field(name="Tempo juntos", value=f"<t:{timestamp}:R>", inline=False)
+    embed.add_field(name="Afinidade", value=f"{record.get('affinity', 0)} pontos", inline=False)
     embed.set_footer(text="Dois corações, uma nova aventura.")
     return embed
 

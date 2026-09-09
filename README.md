@@ -42,6 +42,9 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.marry @membro` | `/marry member:@membro` | Pedido de casamento com confirmação das duas pessoas por botões; aliases: `casar`, `propose` |
 | `r.ship @usuário [@outro]` | `/ship first:@usuário [second:@outro]` | Imagem com os dois avatares e uma porcentagem aleatória fixa para o par; alias: `shippar` |
 | `r.marriage [@usuário]` | `/marriage [member]` | Embed com o casal, data do casamento e tempo juntos; aliases: `casamento`, `married` |
+| `r.kiss @membro` | `/kiss member:@membro` | Beija alguém com GIF; alias: `beijar` |
+| `r.hug @membro` | `/hug member:@membro` | Abraça alguém com GIF; alias: `abracar` |
+| `r.pat @membro` | `/pat member:@membro` | Faz carinho em alguém com GIF; alias: `carinho` |
 | `r.slots 100` | `/slots amount:100` | Caça-níqueis; aliases: `slot`, `slotmachine` |
 | `r.blackjack 100` | `/blackjack amount:100` | Blackjack com botões; aliases: `bj`, `21` |
 | `r.mines 100 [bombas]` | `/mines amount:100 [mine_count]` | Escolha 1–15 bombas no menu ou informe a quantidade. Tabuleiro 4×4; alias: `minas` |
@@ -49,6 +52,14 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 Nos comandos slash, preencha os campos que o Discord oferece; os itens entre colchetes são opcionais. O Discord exige um subcomando em grupos, então visualizar o perfil usa `/profile view`. Todos os aliases da tabela continuam disponíveis com `r.`. Os dois formatos executam os mesmos comandos, com as mesmas permissões, conversores, saldos e cooldowns; alternar entre prefixo e slash não permite repetir uma recompensa ou evitar o intervalo. Os comandos de administração alteram apenas o saldo disponível; apostas já iniciadas continuam com sua liquidação normal.
 
 O ranking é global entre todos os usuários registrados e mostra o saldo disponível, sem apostas em andamento. Empates são ordenados pelo ID do usuário. Nomes vêm do cache do Discord, com ID como alternativa. A imagem é desenhada localmente com Pillow, sem serviços de geração ou downloads de avatares.
+
+## Roleplay
+
+O botão **Retribuir** permite que quem recebeu o beijo, abraço ou carinho responda ao autor com a mesma ação e o próximo GIF. Cada botão pode ser usado uma vez e expira após 2 minutos sem interação. A resposta traz um novo botão para o outro participante e respeita os mesmos cooldowns dos comandos.
+
+`kiss`, `hug` e `pat` enviam embeds com os participantes mencionados, uma frase em português e um GIF grande. Cada comando percorre seus seis GIFs na ordem dos álbuns [kiss](https://imgur.com/a/E5nJtdx), [hug](https://imgur.com/a/gYHRVCv) e [pat](https://imgur.com/a/PLnbgn2), voltando ao primeiro depois do sexto. A rotação é compartilhada entre servidores e entre prefixo/slash, separada por ação, e recomeça ao reiniciar o bot. Os links diretos ficam em `roleplay.py`; alterações futuras nos álbuns precisam ser atualizadas ali.
+
+Use em um servidor e escolha outro membro. Cada ação tem cooldown de 5 segundos por usuário, compartilhado entre prefixo e slash. Quando os dois participantes são casados entre si, a interação acrescenta de 1 a 3 pontos de afinidade e mostra o valor no rodapé. O total aparece em `r.marriage` e `/marriage` e persiste após reiniciar. A tabela `marriage_affinity` é criada automaticamente, preservando os casamentos existentes.
 
 ## Recompensa diária e cooldowns
 
