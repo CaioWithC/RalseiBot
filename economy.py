@@ -5,6 +5,7 @@ from nextcord.ext import commands
 
 from db import database
 from command_support import DualCommand
+from amounts import CoinAmount
 
 
 class Economy(commands.Cog):
@@ -22,9 +23,9 @@ class Economy(commands.Cog):
         await ctx.send(f"{ctx.author.display_name}, você recebeu sua recompensa diária de {reward:,} "
                        f"D$! Seu novo saldo é: {balance:,} D$.")
 
-    @commands.command(cls=DualCommand, aliases=["transferir", "pix", "pagar"], help="Transfira DarkMoney: r.pay @membro valor")
+    @commands.command(cls=DualCommand, aliases=["transferir", "pix", "pagar"], help="Transfira DarkMoney: r.pay @membro valor (ex.: 100, 10K, 1.5M)")
     @commands.guild_only()
-    async def pay(self, ctx, member: nextcord.Member, amount: int):
+    async def pay(self, ctx, member: nextcord.Member, amount: CoinAmount):
         balance = database.transfer(ctx.author.id, member.id, amount)
         await ctx.send(f"{ctx.author.display_name} transferiu {amount:,} D$ para "
                        f"{member.display_name}. Novo saldo: {balance:,} D$.")
