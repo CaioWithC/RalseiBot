@@ -452,6 +452,37 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cog.completed_commands, 3)
         self.assertIs(cog.override, original)
 
+    async def test_pay_suffixes_transfer_exact_amounts_in_both_formats_and_aliases(self):
+        for name in ("pay", "pix", "pagar", "transferir"):
+            for raw, amount in (("100", 100), ("1k", 1000), ("1.5K", 1500),
+                                ("2m", 2_000_000), ("1.25M", 1_250_000)):
+                with self.subTest(command=name, amount=raw):
+                    self.db.set_balance(self.author.id, amount * 2)
+                    self.db.set_balance(self.member.id, 0)
+                    ctx = await self.prefix_context(f"r.{name} <@{self.member.id}> {raw}")
+                    with patch.object(commands.MemberConverter, "convert", new=AsyncMock(return_value=self.member)):
+                        await ctx.command.invoke(ctx)
+                    self.assertEqual(self.db.balance(self.author.id), amount)
+                    self.assertEqual(self.db.balance(self.member.id), amount)
+                    self.assertIn(f"transferiu {amount:,} D$", ctx.send.call_args.args[0])
+                    result = await self.slash("pay", member=self.member, amount=raw)
+                    self.assertIn(f"transferiu {amount:,} D$", result.sent[0]["content"])
+                    self.assertEqual(self.db.balance(self.author.id), 0)
+                    self.assertEqual(self.db.balance(self.member.id), amount * 2)
+
+    async def test_pay_invalid_suffixes_and_insufficient_balance_leave_wallets_unchanged(self):
+        for raw in ("0K", "-1M", "0.0001K", "1.5", "1KK", "1e3", "half", "all", "2M"):
+            with self.subTest(amount=raw):
+                ctx = await self.prefix_context(f"r.pay <@{self.member.id}> {raw}")
+                with patch.object(commands.MemberConverter, "convert", new=AsyncMock(return_value=self.member)):
+                    with self.assertRaises(commands.CommandError):
+                        await ctx.command.invoke(ctx)
+                ctx.send.assert_not_awaited()
+                result = await self.slash("pay", member=self.member, amount=raw)
+                self.assertNotIn("transferiu", result.sent[0]["content"])
+                self.assertEqual(self.db.balance(self.author.id), 10_000)
+                self.assertEqual(self.db.balance(self.member.id), 0)
+
     async def test_bad_input_and_economy_errors_respond_without_spending(self):
         for name, options, expected in (
             ("pay", {"member": self.member, "amount": "1.5"}, "/pay"),

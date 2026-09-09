@@ -4,12 +4,13 @@ import re
 from nextcord.ext import commands
 
 
-def parse_amount(argument):
+def parse_amount(argument, *, allow_aliases=True):
     value = argument.strip()
-    if value.lower() in {"half", "all"}:
+    if allow_aliases and value.lower() in {"half", "all"}:
         return value.lower()
     if len(value) > 4096 or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?[kKmM]?", value):
-        raise commands.BadArgument("Use um valor como 100, 10k, 1.5k, 1m, half ou all.")
+        examples = "100, 10k, 1.5k, 1m, half ou all" if allow_aliases else "100, 10k, 1.5k ou 1m"
+        raise commands.BadArgument(f"Use um valor como {examples}.")
     suffix = value[-1].lower()
     multiplier = {"k": 1_000, "m": 1_000_000}.get(suffix, 1)
     if suffix in {"k", "m"}:
@@ -22,6 +23,11 @@ def parse_amount(argument):
     if amount <= 0 or remainder:
         raise commands.BadArgument("O valor deve representar um número inteiro de moedas maior que zero.")
     return amount
+
+
+class CoinAmount(commands.Converter):
+    async def convert(self, ctx, argument):
+        return parse_amount(argument, allow_aliases=False)
 
 
 class BetAmount(commands.Converter):
