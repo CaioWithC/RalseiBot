@@ -1,0 +1,9 @@
+node_modules/
+.npm-cache/
+.env
+*.db
+*.db-*
+__pycache__/
+.python-packages/
+.venv/
+.wheels/

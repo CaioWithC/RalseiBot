@@ -1,0 +1,15 @@
+.venv
+.vscode
+__pycache__
+*.pyc
+
+.git
+
+.env
+
+node_modules
+.npm-cache
+.python-packages
+.wheels
+
+test

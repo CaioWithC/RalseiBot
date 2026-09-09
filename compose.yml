@@ -1,0 +1,15 @@
+services:
+  discord-bot:
+    build:
+      context: .
+      dockerfile: dockerfile
+
+    container_name: discord-bot
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    volumes:
+      - ./bot.db:/app/bot.db
