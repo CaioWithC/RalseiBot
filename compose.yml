@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 services:
   discord-bot:
     build:
@@ -13,20 +12,4 @@ services:
       - .env
 
     volumes:
-=======
-services:
-  discord-bot:
-    build:
-      context: .
-      dockerfile: dockerfile
-
-    container_name: discord-bot
-
-    restart: unless-stopped
-
-    env_file:
-      - .env
-
-    volumes:
->>>>>>> 2a7ffdd025e80bcbba2c5bcf2e6d47e6908cbc17
       - ./bot.db:/app/bot.db
