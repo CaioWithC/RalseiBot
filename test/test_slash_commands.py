@@ -394,6 +394,15 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("servidor", result.sent[0]["content"])
         self.assertEqual(self.db.balance(self.author.id), 10_000)
 
+    async def accept_payment(self, view):
+        self.views.append(view)
+        for participant in (self.author, self.member):
+            interaction = SimpleNamespace(
+                user=participant, message=view.message,
+                response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            await view.confirm.callback(interaction)
+
     async def test_admin_commands_and_transfers_resolve_member_and_exact_amount(self):
         self.author.guild_permissions.administrator = True
         amount = 8_999_999_999_999_999
@@ -402,7 +411,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         await self.slash("resetbalance", member=self.member)
         self.assertEqual(self.db.balance(self.member.id), 0)
         await self.slash("addbalance", member=self.member, amount="300")
-        await self.slash("pay", member=self.member, amount="100")
+        result = await self.slash("pay", member=self.member, amount="100")
+        self.assertEqual(self.db.balance(self.member.id), 300)
+        await self.accept_payment(result.sent[0]["view"])
         self.assertEqual(self.db.balance(self.member.id), 400)
         self.assertEqual(self.db.balance(self.author.id), 9900)
 
@@ -462,11 +473,17 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
                     ctx = await self.prefix_context(f"r.{name} <@{self.member.id}> {raw}")
                     with patch.object(commands.MemberConverter, "convert", new=AsyncMock(return_value=self.member)):
                         await ctx.command.invoke(ctx)
+                    self.assertEqual(self.db.balance(self.author.id), amount * 2)
+                    self.assertEqual(self.db.balance(self.member.id), 0)
+                    view = ctx.send.call_args.kwargs["view"]
+                    await self.accept_payment(view)
                     self.assertEqual(self.db.balance(self.author.id), amount)
                     self.assertEqual(self.db.balance(self.member.id), amount)
-                    self.assertIn(f"transferiu {amount:,} D$", ctx.send.call_args.args[0])
+                    self.assertIn(f"transferiu {amount:,} D$", view.content())
                     result = await self.slash("pay", member=self.member, amount=raw)
-                    self.assertIn(f"transferiu {amount:,} D$", result.sent[0]["content"])
+                    self.assertEqual(self.db.balance(self.author.id), amount)
+                    await self.accept_payment(result.sent[0]["view"])
+                    self.assertIn(f"transferiu {amount:,} D$", result.sent[0]["view"].content())
                     self.assertEqual(self.db.balance(self.author.id), 0)
                     self.assertEqual(self.db.balance(self.member.id), amount * 2)
 

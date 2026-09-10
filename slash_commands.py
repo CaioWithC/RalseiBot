@@ -89,7 +89,7 @@ class SlashCommands(commands.Cog):
     member: nextcord.Member = nextcord.SlashOption(description="Membro que será roubado.")):
         await self.invoke(interaction, "rob", member=member)
 
-    @nextcord.slash_command(name="pay", description="Transfira DarkMoney para outro membro.", contexts=GUILD_ONLY)
+    @nextcord.slash_command(name="pay", description="Transfira DarkMoney com aceite das duas pessoas por botão.", contexts=GUILD_ONLY)
     async def pay(self, interaction: nextcord.Interaction,
                   member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá as moedas."),
                   amount: str = nextcord.SlashOption(description="Quantidade de moedas. Ex.: 100, 10K ou 1.5M.")):

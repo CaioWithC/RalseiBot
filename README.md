@@ -28,7 +28,7 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.work` | `/work` | Ganha 10.000–40.000 moedas; intervalo de 2h; somente em servidores |
 | `r.freelance` | `/freelance` | Ganha 100–10.000 moedas; intervalo de 10min; aliases: `freelancer`, `freelas`, `frelas` |
 | `r.rob @membro` | `/rob member:@membro` | Tenta roubar DarkMoney de outro membro; intervalo de 1h |
-| `r.pay @membro 100` | `/pay member:@membro amount:100` | Transfere moedas no servidor; aceita `K` (mil) e `M` (milhão), como `1.5k` ou `2M`, sem diferenciar maiúsculas; aliases: `transferir`, `pix`, `pagar` |
+| `r.pay @membro 100` | `/pay member:@membro amount:100` | Transfere moedas após as duas pessoas clicarem em Aceitar; qualquer uma pode cancelar e o pedido expira após 2 minutos sem interação; aceita `K` (mil) e `M` (milhão), como `1.5k` ou `2M`; aliases: `transferir`, `pix`, `pagar` |
 | `r.addbalance @membro 100` | `/addbalance member:@membro amount:100` | Adiciona moedas; somente administradores |
 | `r.setbalance @membro 100` | `/setbalance member:@membro amount:100` | Define o saldo disponível; somente administradores |
 | `r.resetbalance @membro` | `/resetbalance member:@membro` | Zera o saldo disponível; somente administradores |
