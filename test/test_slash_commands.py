@@ -44,7 +44,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.db.add_balance(self.author.id, 10_000)
         self.economy_patch = patch("economy.database", self.db)
         self.economy_patch.start()
-        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay"):
+        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets"):
             self.bot.get_cog(name).storage = self.db
         self.apps = {command.name: command for command in self.bot.get_all_application_commands()}
         self.views = []
@@ -140,7 +140,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             for alias in command.aliases:
                 prefix = f"{command.parent.qualified_name} " if command.parent else ""
                 self.assertIs(self.bot.get_command(prefix + alias), command)
-        for name in ("pay", "work", "addbalance", "setbalance", "resetbalance", "activity"):
+        for name in ("pay", "work", "addbalance", "setbalance", "resetbalance", "activity", "close"):
             self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0])
         for name in ("addbalance", "setbalance", "resetbalance", "activity"):
             self.assertEqual(self.apps[name].get_payload(None)["default_member_permissions"], "8")
@@ -155,7 +155,8 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         for name, alias in (("kiss", "beijar"), ("hug", "abracar"), ("pat", "carinho")):
             self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0])
             result = await self.slash(name, member=self.member)
-            self.assertEqual(result.sent[0]["embed"].image.url, GIFS[name][0])
+            first_gif = result.sent[0]["embed"].image.url
+            self.assertIn(first_gif, GIFS[name])
             ctx = await self.prefix_context(f"r.{alias} <@{self.member.id}>")
             with self.assertRaises(commands.CommandOnCooldown):
                 await ctx.command.invoke(ctx)
@@ -163,7 +164,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             ctx = await self.prefix_context(f"r.{alias} <@{self.member.id}>")
             with patch.object(commands.MemberConverter, "convert", new=AsyncMock(return_value=self.member)):
                 await ctx.command.invoke(ctx)
-            self.assertEqual(ctx.send.call_args.kwargs["embed"].image.url, GIFS[name][1])
+            next_gif = ctx.send.call_args.kwargs["embed"].image.url
+            self.assertIn(next_gif, GIFS[name])
+            self.assertNotEqual(next_gif, first_gif)
             result = await self.slash(name, member=self.member)
             self.assertIn("Aguarde", result.sent[0]["content"])
             result = await self.slash(name, member=self.member, guild=False)
@@ -191,7 +194,8 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.db.marriage(self.author.id)["affinity"], before + 2)
             embed = first.sent[0]["embed"]
             self.assertLess(embed.description.index(str(self.member.id)), embed.description.index(str(self.author.id)))
-            self.assertEqual(embed.image.url, GIFS[action][1])
+            self.assertIn(embed.image.url, GIFS[action])
+            self.assertNotEqual(embed.image.url, original.sent[0]["embed"].image.url)
             self.assertTrue(view.reciprocate.disabled)
             self.assertTrue(view.is_finished())
             self.assertIn("já foi retribuída", second.sent[0]["content"])
@@ -207,7 +211,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             retry = self.interaction(action, author=self.author)
             retry.message = reply_view.message
             await reply_view.reciprocate.callback(retry)
-            self.assertEqual(retry.sent[0]["embed"].image.url, GIFS[action][2])
+            retry_gif = retry.sent[0]["embed"].image.url
+            self.assertIn(retry_gif, GIFS[action])
+            self.assertNotIn(retry_gif, (original.sent[0]["embed"].image.url, embed.image.url))
             self.assertTrue(reply_view.done)
 
     async def test_reciprocate_timeout_disables_button_without_awarding_points(self):
@@ -393,6 +399,32 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             result = await self.slash(name, guild=False, **options)
             self.assertIn("servidor", result.sent[0]["content"])
         self.assertEqual(self.db.balance(self.author.id), 10_000)
+
+    async def test_close_ticket_prefix_aliases_and_slash(self):
+        self.db.configure_tickets(321, 50)
+        channel = Mock(spec=nextcord.TextChannel)
+        channel.id = 123
+        channel.category_id = 50
+        channel.topic = f"ticket-owner:{self.author.id}"
+        channel.delete = AsyncMock()
+        channel.permissions_for.return_value = nextcord.Permissions.none()
+        for name in ("close", "fechar", "closeticket"):
+            ctx = await self.prefix_context(f"r.{name}")
+            ctx.channel = channel
+            await ctx.command.invoke(ctx)
+        interaction = self.interaction("close")
+        interaction.channel = channel
+        await self.apps["close"].call(self.bot._connection, interaction)
+        self.assertEqual(channel.delete.await_count, 4)
+        self.assertIn("excluindo", interaction.sent[0]["content"])
+        interaction.response.defer.assert_awaited_once()
+
+    async def test_close_ticket_rejects_direct_messages_in_both_formats(self):
+        result = await self.slash("close", guild=False)
+        self.assertIn("servidor", result.sent[0]["content"])
+        ctx = await self.prefix_context("r.close", guild=False)
+        with self.assertRaises(commands.NoPrivateMessage):
+            await ctx.command.invoke(ctx)
 
     async def accept_payment(self, view):
         self.views.append(view)

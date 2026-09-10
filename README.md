@@ -34,6 +34,7 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.resetbalance @membro` | `/resetbalance member:@membro` | Zera o saldo disponível; somente administradores |
 | `r.activity Seu texto aqui` | `/activity text:Seu texto aqui` | Atividade personalizada por 5 minutos; somente administradores; aliases: `atividade`, `status`. Use `reset` para retomar a rotação |
 | `r.ticket Categoria` | `/ticket category:Categoria` | Publica um painel que cria tickets privados numerados; somente administradores |
+| `r.close` | `/close` | Fecha o ticket atual e exclui seu canal; somente o dono ou quem tem Gerenciar Canais; aliases: `fechar`, `closeticket` |
 | `r.rich [página]` | `/rich [page]` | PNG com 10 jogadores, posições, nomes e saldos; aliases: `richlist`, `leaderboard`, `top`, `rank` |
 | `r.profile [@usuário]` | `/profile view [member]` | Perfil em imagem com avatar, nome, ID, ranking, saldo, fundo e Sobre mim; alias: `perfil` |
 | `r.profile color #77E5BC` | `/profile color value:#77E5BC` | Cor dos painéis do seu perfil em hexadecimal; alias: `cor` |
@@ -57,7 +58,7 @@ O ranking é global entre todos os usuários registrados e mostra o saldo dispon
 
 O botão **Retribuir** permite que quem recebeu o beijo, abraço ou carinho responda ao autor com a mesma ação e o próximo GIF. Cada botão pode ser usado uma vez e expira após 2 minutos sem interação. A resposta traz um novo botão para o outro participante e respeita os mesmos cooldowns dos comandos.
 
-`kiss`, `hug` e `pat` enviam embeds com os participantes mencionados, uma frase em português e um GIF grande. Cada comando percorre seus seis GIFs na ordem dos álbuns [kiss](https://imgur.com/a/E5nJtdx), [hug](https://imgur.com/a/gYHRVCv) e [pat](https://imgur.com/a/PLnbgn2), voltando ao primeiro depois do sexto. A rotação é compartilhada entre servidores e entre prefixo/slash, separada por ação, e recomeça ao reiniciar o bot. Os links diretos ficam em `roleplay.py`; alterações futuras nos álbuns precisam ser atualizadas ali.
+`kiss`, `hug` e `pat` enviam embeds com os participantes mencionados, uma frase em português e um GIF grande. Cada comando sorteia um dos seus seis GIFs dos álbuns [kiss](https://imgur.com/a/E5nJtdx), [hug](https://imgur.com/a/gYHRVCv) e [pat](https://imgur.com/a/PLnbgn2) a cada uso, passando por todos antes de repetir. O último GIF de uma rodada nunca é o primeiro da próxima. A seleção é compartilhada entre servidores, prefixo/slash e o botão Retribuir, separada por ação, e recomeça ao reiniciar o bot. Os links diretos ficam em `roleplay.py`; alterações futuras nos álbuns precisam ser atualizadas ali.
 
 Use em um servidor e escolha outro membro. Cada ação tem cooldown de 5 segundos por usuário, compartilhado entre prefixo e slash. Quando os dois participantes são casados entre si, a interação acrescenta de 1 a 3 pontos de afinidade e mostra o valor no rodapé. O total aparece em `r.marriage` e `/marriage` e persiste após reiniciar. A tabela `marriage_affinity` é criada automaticamente, preservando os casamentos existentes.
 

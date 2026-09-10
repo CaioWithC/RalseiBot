@@ -1,4 +1,4 @@
-"""Persistent private ticket panels and channel creation."""
+"""Persistent private ticket panels, channel creation and closing."""
 import asyncio
 import re
 import unicodedata
@@ -71,7 +71,8 @@ class TicketPanel(nextcord.ui.View):
                     reason=f"Ticket #{number} aberto por {interaction.user} ({interaction.user.id})",
                 )
                 await channel.send(
-                    f"{interaction.user.mention}, seu ticket foi aberto. Descreva aqui como podemos ajudar."
+                    f"{interaction.user.mention}, seu ticket foi aberto. Descreva aqui como podemos ajudar.\n"
+                    "Use `r.close` ou `/close` para fechar o ticket e excluir este canal."
                 )
             except nextcord.HTTPException:
                 await interaction.followup.send(
@@ -106,6 +107,35 @@ class Tickets(commands.Cog):
         )
         embed.set_footer(text=f"Os tickets serão criados em {category.name}.")
         await ctx.send(embed=embed, view=TicketPanel(self.bot, self.storage))
+
+    @commands.command(cls=DualCommand, name="close", aliases=["fechar", "closeticket"],
+                      help="Fecha o ticket atual e exclui seu canal. Somente o dono ou quem pode gerenciar canais.")
+    @commands.guild_only()
+    async def close(self, ctx):
+        channel = ctx.channel
+        category_id = self.storage.ticket_category(ctx.guild.id)
+        if (not isinstance(channel, nextcord.TextChannel)
+                or category_id is None or channel.category_id != category_id):
+            await ctx.send("Use este comando dentro de um ticket na categoria configurada.")
+            return
+        owner = re.fullmatch(r"ticket-owner:([0-9]+)", channel.topic or "")
+        if owner is None:
+            await ctx.send("Este canal não é um ticket.")
+            return
+        if (ctx.author.id != int(owner[1])
+                and not channel.permissions_for(ctx.author).manage_channels):
+            await ctx.send("Só o dono do ticket ou quem tem permissão de Gerenciar Canais pode fechá-lo.")
+            return
+        await ctx.send("Fechando o ticket e excluindo este canal...")
+        try:
+            await channel.delete(reason=f"Ticket fechado por {ctx.author} ({ctx.author.id})")
+        except nextcord.NotFound:
+            # Another close request may have already deleted the channel.
+            return
+        except nextcord.Forbidden:
+            await ctx.send("Não consegui fechar o ticket. Preciso da permissão de Gerenciar Canais.")
+        except nextcord.HTTPException:
+            await ctx.send("Não consegui fechar o ticket. Tente novamente em instantes.")
 
 
 def setup(bot):

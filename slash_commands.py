@@ -53,6 +53,10 @@ class SlashCommands(commands.Cog):
                          channel_types=[nextcord.ChannelType.category])):
         await self.invoke(interaction, "ticket", category=category)
 
+    @nextcord.slash_command(name="close", description="Fecha o ticket atual e exclui seu canal.", contexts=GUILD_ONLY)
+    async def close(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "close")
+
     @nextcord.slash_command(name="kiss", description="Beije alguém com um GIF.", contexts=GUILD_ONLY)
     async def kiss(self, interaction: nextcord.Interaction,
                    member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá o beijo.")):

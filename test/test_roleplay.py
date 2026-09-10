@@ -24,12 +24,18 @@ class RoleplayTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         self.db.engine.dispose()
 
-    async def test_each_action_cycles_all_six_gifs_independently(self):
-        for index in range(8):
+    async def test_each_action_randomly_uses_all_six_gifs_before_repeating(self):
+        history = {action: [] for action in GIFS}
+        for index in range(24):
             for action, verb in (("kiss", "beijou"), ("hug", "abraçou"), ("pat", "fez carinho em")):
                 await self.cog.interact(self.ctx, self.member, action)
                 embed = self.ctx.send.call_args.kwargs["embed"]
-                self.assertEqual(embed.image.url, GIFS[action][index % 6])
+                self.assertIn(embed.image.url, GIFS[action])
+                history[action].append(embed.image.url)
+                if index:
+                    self.assertNotEqual(history[action][-1], history[action][-2])
+                if index % 6 == 5:
+                    self.assertCountEqual(history[action][-6:], GIFS[action])
                 self.assertIn(f"<@1> {verb} <@2>", embed.description)
                 self.assertNotIn("footer", embed.to_dict())
                 self.assertFalse(embed.fields)
@@ -37,7 +43,24 @@ class RoleplayTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_concurrent_commands_take_different_gifs(self):
         await asyncio.gather(*(self.cog.interact(self.ctx, self.member, "kiss") for _ in range(6)))
-        self.assertEqual([call.kwargs["embed"].image.url for call in self.ctx.send.call_args_list], list(GIFS["kiss"]))
+        self.assertCountEqual([call.kwargs["embed"].image.url for call in self.ctx.send.call_args_list], GIFS["kiss"])
+
+    def test_random_choice_is_made_each_time_and_actions_are_independent(self):
+        with patch("roleplay.random.choice", side_effect=lambda choices: choices[-1]) as choose:
+            selected = [self.cog.next_gif("kiss") for _ in range(6)]
+            self.assertEqual(selected, list(reversed(GIFS["kiss"])))
+            self.assertEqual(choose.call_count, 6)
+            self.assertCountEqual(choose.call_args_list[0].args[0], GIFS["kiss"])
+            self.assertEqual(self.cog.next_gif("hug"), GIFS["hug"][-1])
+            self.assertCountEqual(choose.call_args.args[0], GIFS["hug"])
+
+    def test_new_round_excludes_the_last_gif_from_previous_round(self):
+        with patch("roleplay.random.choice", side_effect=lambda choices: choices[0]):
+            selected = [self.cog.next_gif("kiss") for _ in range(6)]
+        with patch("roleplay.random.choice", side_effect=lambda choices: choices[-1]) as choose:
+            next_gif = self.cog.next_gif("kiss")
+            self.assertNotIn(selected[-1], choose.call_args.args[0])
+            self.assertNotEqual(next_gif, selected[-1])
 
     async def test_spouses_gain_actual_points_and_other_members_do_not(self):
         self.db.marry(2, 1)
@@ -55,8 +78,10 @@ class RoleplayTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(EconomyError):
             await self.cog.interact(self.ctx, self.ctx.author, "kiss")
         self.ctx.send.assert_not_awaited()
+        self.assertEqual(self.cog.gifs["kiss"], [])
+        self.assertNotIn("kiss", self.cog.last_gif)
         await self.cog.interact(self.ctx, self.member, "kiss")
-        self.assertEqual(self.ctx.send.call_args.kwargs["embed"].image.url, GIFS["kiss"][0])
+        self.assertIn(self.ctx.send.call_args.kwargs["embed"].image.url, GIFS["kiss"])
 
 
 class AffinityStorageTests(unittest.TestCase):
