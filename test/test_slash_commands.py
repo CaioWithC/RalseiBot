@@ -44,7 +44,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.db.add_balance(self.author.id, 10_000)
         self.economy_patch = patch("cogs.economy.database", self.db)
         self.economy_patch.start()
-        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets"):
+        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets", "Missions"):
             self.bot.get_cog(name).storage = self.db
         self.apps = {command.name: command for command in self.bot.get_all_application_commands()}
         self.views = []
@@ -122,6 +122,28 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         ctx = await self.bot.get_context(message)
         ctx.send = AsyncMock()
         return ctx
+
+    async def test_missions_share_progress_and_claims_across_prefix_and_slash(self):
+        await self.slash("daily")
+        await self.slash("work")
+        ctx = await self.prefix_context("r.freelas")
+        await self.bot.invoke(ctx)
+        self.assertFalse(ctx.command_failed)
+        statuses, _ = self.db.mission_status(self.author.id)
+        self.assertEqual([item["progress"] for item in statuses], [1, 1, 1])
+        balance = self.db.balance(self.author.id)
+        viewed = await self.slash("missions")
+        self.assertEqual(len(viewed.sent[-1]["embed"].fields), 3)
+        ctx = await self.prefix_context("r.missoes claim")
+        await self.bot.invoke(ctx)
+        self.assertIn("7,500", ctx.send.call_args.args[0])
+        self.assertEqual(self.db.balance(self.author.id), balance + 7500)
+        repeated = await self.slash("missions", action="claim")
+        self.assertIn("Nenhuma recompensa", repeated.sent[-1]["content"])
+        self.assertEqual(self.db.balance(self.author.id), balance + 7500)
+        await self.slash("freelance")  # Shared cooldown must not advance progress.
+        statuses, _ = self.db.mission_status(self.author.id)
+        self.assertEqual(statuses[2]["progress"], 1)
 
     async def test_every_prefix_command_has_a_registered_slash_equivalent(self):
         registered = set()

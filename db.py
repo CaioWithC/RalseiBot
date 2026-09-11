@@ -11,6 +11,8 @@ from sqlalchemy import Column, Integer, String, LargeBinary, create_engine, sele
 from sqlalchemy.orm import Session, declarative_base
 from sqlalchemy.types import TypeDecorator
 
+from cogs.mission_rules import MISSIONS
+
 Base = declarative_base()
 MAX_BALANCE = 9_000_000_000_000_000
 DAILY_TIMEZONE = timezone(timedelta(hours=-3))
@@ -69,6 +71,15 @@ class DailyClaim(Base):
     __tablename__ = "daily_claims"
     discord_id = Column(String, primary_key=True)
     claimed_at = Column(Integer, nullable=False)
+
+
+class MissionProgress(Base):
+    __tablename__ = "mission_progress"
+    discord_id = Column(String, primary_key=True)
+    mission = Column(String, primary_key=True)
+    day_start = Column(Integer, nullable=False)
+    progress = Column(Integer, nullable=False, default=0)
+    claimed = Column(Integer, nullable=False, default=0)
 
 
 class SocialProfile(Base):
@@ -178,6 +189,64 @@ class Database:
                 sender.balance -= amount
             return sender.balance
 
+    @staticmethod
+    def advance_mission(session, discord_id, key, now):
+        definition = next(mission for mission in MISSIONS if mission.key == key)
+        day_start = next_daily_reset(now) - 86400
+        row = session.get(MissionProgress, (str(discord_id), key))
+        if row is None:
+            session.add(MissionProgress(discord_id=str(discord_id), mission=key,
+                                        day_start=day_start, progress=1, claimed=0))
+        else:
+            if row.day_start != day_start:
+                row.day_start, row.progress, row.claimed = day_start, 0, 0
+            row.progress = min(definition.target, row.progress + 1)
+
+    def mission_status(self, discord_id, now=None):
+        now = int(time.time() if now is None else now)
+        reset_at = next_daily_reset(now)
+        with Session(self.engine) as session:
+            rows = {row.mission: row for row in session.scalars(
+                select(MissionProgress).where(
+                    MissionProgress.discord_id == str(discord_id),
+                    MissionProgress.day_start == reset_at - 86400))}
+            return [{"mission": mission,
+                     "progress": rows[mission.key].progress if mission.key in rows else 0,
+                     "claimed": bool(rows[mission.key].claimed) if mission.key in rows else False}
+                    for mission in MISSIONS], reset_at
+
+    def claim_missions(self, discord_id, now=None):
+        """Credit all completed daily missions atomically, at most once each."""
+        with self.transaction() as session:
+            now = int(time.time() if now is None else now)
+            day_start = next_daily_reset(now) - 86400
+            completed = []
+            for mission in MISSIONS:
+                row = session.get(MissionProgress, (str(discord_id), mission.key))
+                if (row is not None and row.day_start == day_start
+                        and row.progress >= mission.target and not row.claimed):
+                    completed.append((mission, row))
+            if not completed:
+                raise EconomyError("Nenhuma recompensa disponível. Veja seu progresso com r.missions ou /missions.")
+            reward = sum(mission.reward for mission, _ in completed)
+            user = self.user(session, discord_id)
+            self.credit(user, reward)
+            for _, row in completed:
+                row.claimed = 1
+            return reward, user.balance
+
+    def job_reward(self, discord_id, job, reward, now=None):
+        """Persist job income and mission progress in the same transaction."""
+        if job not in {"work", "freelance"}:
+            raise EconomyError("Trabalho inválido.")
+        self.positive(reward)
+        with self.transaction() as session:
+            now = int(time.time() if now is None else now)
+            user = self.user(session, discord_id)
+            self.credit(user, reward)
+            self.advance_mission(session, discord_id, job, now)
+            return user.balance
+
     def daily(self, discord_id, reward, now=None):
         self.positive(reward)
         with self.transaction() as session:
@@ -194,6 +263,7 @@ class Database:
                 claim.claimed_at = now
             else:
                 session.add(DailyClaim(discord_id=str(discord_id), claimed_at=now))
+            self.advance_mission(session, discord_id, "daily", now)
             return user.balance
 
     def reserve_bet(self, discord_id, game, stake):

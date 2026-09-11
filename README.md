@@ -25,6 +25,7 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.ping` | `/ping` | Verifica se o bot está online |
 | `r.balance` | `/balance` | Saldo; aliases: `saldo`, `atm`, `bal` |
 | `r.daily` | `/daily` | Recompensa de 5.000–100.000 moedas uma vez por dia; renova às 00:00 GMT-3, persistente |
+| `r.missions [claim]` | `/missions [action:view/claim]` | Veja as missões diárias ou resgate todos os bônus concluídos; aliases: `mission`, `missoes`, `missões` |
 | `r.work` | `/work` | Ganha 10.000–40.000 moedas; intervalo de 2h; somente em servidores |
 | `r.freelance` | `/freelance` | Ganha 100–10.000 moedas; intervalo de 10min; aliases: `freelancer`, `freelas`, `frelas` |
 | `r.rob @membro` | `/rob member:@membro` | Tenta roubar DarkMoney de outro membro; intervalo de 1h |
@@ -53,6 +54,20 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 Nos comandos slash, preencha os campos que o Discord oferece; os itens entre colchetes são opcionais. O Discord exige um subcomando em grupos, então visualizar o perfil usa `/profile view`. Todos os aliases da tabela continuam disponíveis com `r.`. Os dois formatos executam os mesmos comandos, com as mesmas permissões, conversores, saldos e cooldowns; alternar entre prefixo e slash não permite repetir uma recompensa ou evitar o intervalo. Os comandos de administração alteram apenas o saldo disponível; apostas já iniciadas continuam com sua liquidação normal.
 
 O ranking é global entre todos os usuários registrados e mostra o saldo disponível, sem apostas em andamento. Empates são ordenados pelo ID do usuário. Nomes vêm do cache do Discord, com ID como alternativa. A imagem é desenhada localmente com Pillow, sem serviços de geração ou downloads de avatares.
+
+## Missões diárias
+
+Use `r.missions` ou `/missions` para acompanhar três tarefas diárias:
+
+| Tarefa | Meta | Bônus |
+| --- | --- | --- |
+| Boas-vindas ao reino | Receber `daily` uma vez | 2.500 D$ |
+| Um dia de trabalho | Concluir `work` uma vez | 5.000 D$ |
+| Talento independente | Concluir `freelance` três vezes | 7.500 D$ |
+
+`r.missions claim` ou `/missions action:claim` resgata todos os bônus disponíveis de uma vez, além do pagamento normal dos comandos. Cada missão paga uma única vez por dia. O progresso é global por usuário, começa a contar após a instalação desta versão e fica salvo mesmo ao reiniciar o bot. As missões renovam às **00:00 GMT-3**; bônus não resgatados expiram nesse horário. Não é necessário abrir a lista para começar a progredir.
+
+Somente pagamentos bem-sucedidos de `daily`, `work` e `freelance` contam; comandos recusados e créditos de administradores não contam. Os cooldowns existentes continuam valendo. A tabela `mission_progress` é criada automaticamente no banco. Metas, títulos e bônus ficam em `cogs/mission_rules.py`.
 
 ## Roleplay
 

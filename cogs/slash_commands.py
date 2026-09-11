@@ -80,6 +80,12 @@ class SlashCommands(commands.Cog):
     async def daily(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "daily")
 
+    @nextcord.slash_command(name="missions", description="Veja suas missões diárias ou resgate os bônus de DarkMoney.")
+    async def missions(self, interaction: nextcord.Interaction,
+                       action: str = nextcord.SlashOption(description="Ver progresso ou resgatar todos os bônus disponíveis.",
+                                                          default="view", choices=["view", "claim"])):
+        await self.invoke(interaction, "missions", action=action)
+
     @nextcord.slash_command(name="work", description="Trabalhe para ganhar DarkMoney a cada 2 horas.", contexts=GUILD_ONLY)
     async def work(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "work")

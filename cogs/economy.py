@@ -153,7 +153,7 @@ class Economy(commands.Cog):
     @commands.cooldown(1, 7200, lambda message: message.author.id)
     async def work(self, ctx):
         reward = random.randint(10000, 40000)
-        balance = database.add_balance(ctx.author.id, reward)
+        balance = database.job_reward(ctx.author.id, "work", reward)
         await ctx.send(f"{ctx.author.display_name}, você trabalhou e ganhou {reward:,} D$! "
                        f"Seu novo saldo é: {balance:,} D$.")
 
@@ -162,7 +162,7 @@ class Economy(commands.Cog):
     @commands.cooldown(1, 600, lambda message: message.author.id)
     async def freelance(self, ctx):
         reward = random.randint(100, 10000)
-        balance = database.add_balance(ctx.author.id, reward)
+        balance = database.job_reward(ctx.author.id, "freelance", reward)
         await ctx.send(f"{ctx.author.display_name}, você fez um freelance e ganhou {reward:,} D$! "
                        f"Seu novo saldo é: {balance:,} D$.")
 

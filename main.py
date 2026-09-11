@@ -42,7 +42,7 @@ def create_bot():
     intents.message_content = True
     bot = commands.Bot(command_prefix="r.", intents=intents, help_command=None,
                        allowed_mentions=nextcord.AllowedMentions.none())
-    for extension in ("economy", "leaderboard", "games", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets"):
+    for extension in ("economy", "leaderboard", "games", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions"):
         bot.load_extension(f"cogs.{extension}")
 
     @bot.event
