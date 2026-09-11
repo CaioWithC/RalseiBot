@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 os.environ["BOT_DATABASE_URL"] = "sqlite:///:memory:"
 
 from db import Database, EconomyError
-from roleplay import GIFS, Roleplay
+from cogs.roleplay import GIFS, Roleplay
 
 
 class RoleplayTests(unittest.IsolatedAsyncioTestCase):
@@ -46,7 +46,7 @@ class RoleplayTests(unittest.IsolatedAsyncioTestCase):
         self.assertCountEqual([call.kwargs["embed"].image.url for call in self.ctx.send.call_args_list], GIFS["kiss"])
 
     def test_random_choice_is_made_each_time_and_actions_are_independent(self):
-        with patch("roleplay.random.choice", side_effect=lambda choices: choices[-1]) as choose:
+        with patch("cogs.roleplay.random.choice", side_effect=lambda choices: choices[-1]) as choose:
             selected = [self.cog.next_gif("kiss") for _ in range(6)]
             self.assertEqual(selected, list(reversed(GIFS["kiss"])))
             self.assertEqual(choose.call_count, 6)
@@ -55,9 +55,9 @@ class RoleplayTests(unittest.IsolatedAsyncioTestCase):
             self.assertCountEqual(choose.call_args.args[0], GIFS["hug"])
 
     def test_new_round_excludes_the_last_gif_from_previous_round(self):
-        with patch("roleplay.random.choice", side_effect=lambda choices: choices[0]):
+        with patch("cogs.roleplay.random.choice", side_effect=lambda choices: choices[0]):
             selected = [self.cog.next_gif("kiss") for _ in range(6)]
-        with patch("roleplay.random.choice", side_effect=lambda choices: choices[-1]) as choose:
+        with patch("cogs.roleplay.random.choice", side_effect=lambda choices: choices[-1]) as choose:
             next_gif = self.cog.next_gif("kiss")
             self.assertNotIn(selected[-1], choose.call_args.args[0])
             self.assertNotEqual(next_gif, selected[-1])
@@ -65,7 +65,7 @@ class RoleplayTests(unittest.IsolatedAsyncioTestCase):
     async def test_spouses_gain_actual_points_and_other_members_do_not(self):
         self.db.marry(2, 1)
         for points, action in enumerate(GIFS, start=1):
-            with patch("roleplay.random.randint", return_value=points):
+            with patch("cogs.roleplay.random.randint", return_value=points):
                 await self.cog.interact(self.ctx, self.member, action)
             embed = self.ctx.send.call_args.kwargs["embed"]
             self.assertIn(f"ganhou {points} ponto", embed.footer.text)

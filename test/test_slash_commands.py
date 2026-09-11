@@ -15,8 +15,8 @@ from PIL import Image
 
 from db import Database
 from main import create_bot, error_message
-from game_rules import Blackjack
-from social import MAX_UPLOAD_BYTES
+from cogs.game_rules import Blackjack
+from cogs.social import MAX_UPLOAD_BYTES
 
 
 def png():
@@ -42,7 +42,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.author = user()
         self.member = user(222222222222222222)
         self.db.add_balance(self.author.id, 10_000)
-        self.economy_patch = patch("economy.database", self.db)
+        self.economy_patch = patch("cogs.economy.database", self.db)
         self.economy_patch.start()
         for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets"):
             self.bot.get_cog(name).storage = self.db
@@ -150,7 +150,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
                          nextcord.ApplicationCommandOptionType.attachment)
 
     async def test_roleplay_prefix_and_slash_share_rotation_cooldowns_and_affinity(self):
-        from roleplay import GIFS
+        from cogs.roleplay import GIFS
         self.db.marry(self.author.id, self.member.id)
         for name, alias in (("kiss", "beijar"), ("hug", "abracar"), ("pat", "carinho")):
             self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0])
@@ -174,7 +174,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(6 <= self.db.marriage(self.author.id)["affinity"] <= 18)
 
     async def test_reciprocate_swaps_participants_rotates_gif_and_prevents_duplicate_clicks(self):
-        from roleplay import GIFS
+        from cogs.roleplay import GIFS
         self.db.marry(self.author.id, self.member.id)
         for action in GIFS:
             original = await self.slash(action, member=self.member)
@@ -188,7 +188,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             first = self.interaction(action, author=self.member)
             second = self.interaction(action, author=self.member)
             first.message = second.message = view.message
-            with patch("roleplay.random.randint", return_value=2):
+            with patch("cogs.roleplay.random.randint", return_value=2):
                 before = self.db.marriage(self.author.id)["affinity"]
                 await asyncio.gather(view.reciprocate.callback(first), view.reciprocate.callback(second))
             self.assertEqual(self.db.marriage(self.author.id)["affinity"], before + 2)
@@ -238,7 +238,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_ping_balance_daily_and_work_use_existing_handlers(self):
         self.assertEqual((await self.slash("ping")).sent[0]["content"], "Pong!")
         self.assertIn("10,000", (await self.slash("balance")).sent[0]["content"])
-        with patch("economy.random.randint", return_value=5000):
+        with patch("cogs.economy.random.randint", return_value=5000):
             await self.slash("daily")
             await self.slash("work")
         self.assertEqual(self.db.balance(self.author.id), 20_000)
@@ -344,14 +344,14 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_daily_shares_midnight_reset_and_relative_timestamps_across_both_formats(self):
         midnight = int(datetime.fromisoformat("2026-09-08T03:00:00+00:00").timestamp())
-        with patch("economy.random.randint", return_value=5000), patch("db.time.time", return_value=midnight - 1):
+        with patch("cogs.economy.random.randint", return_value=5000), patch("db.time.time", return_value=midnight - 1):
             await self.slash("daily")
             ctx = await self.prefix_context("r.daily")
             await self.bot.invoke(ctx)
             await asyncio.sleep(0)
             self.assertIn(f"<t:{midnight}:R>", ctx.send.call_args.args[0])
             self.assertEqual(self.db.balance(self.author.id), 15000)
-        with patch("economy.random.randint", return_value=5000), patch("db.time.time", return_value=midnight):
+        with patch("cogs.economy.random.randint", return_value=5000), patch("db.time.time", return_value=midnight):
             ctx = await self.prefix_context("r.daily")
             await self.bot.invoke(ctx)
             await asyncio.sleep(0)
@@ -559,7 +559,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
                 with patch.object(self.bot.get_cog("Games"), "start_game", side_effect=start):
                     await self.slash(name, amount=raw)
                 self.assertEqual(received, [expected])
-        with patch("games.RNG.choice", return_value="💎"):
+        with patch("cogs.games.RNG.choice", return_value="💎"):
             await self.slash("slots", amount="ALL")
         self.assertEqual(self.db.balance(self.author.id), 100_000)
 
@@ -582,7 +582,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_blackjack_button_settlement_edits_slash_message(self):
         # Deal player 19, dealer 18, avoiding an immediate natural.
         cards = list(reversed([("10", "♠"), ("10", "♥"), ("9", "♠"), ("8", "♥")]))
-        with patch("games.Blackjack", side_effect=lambda amount: Blackjack(amount, cards)):
+        with patch("cogs.games.Blackjack", side_effect=lambda amount: Blackjack(amount, cards)):
             result = await self.slash("blackjack", amount="100")
         view = result.sent[0]["view"]
         click = SimpleNamespace(user=self.author, message=view.message,

@@ -15,7 +15,7 @@ import nextcord
 from PIL import Image
 
 from db import Database, EconomyError, database
-from marriage import Relationships, marriage_embed, render_ship, read_avatar
+from cogs.marriage import Relationships, marriage_embed, render_ship, read_avatar
 
 
 def tearDownModule():
@@ -223,7 +223,7 @@ class ProposalTests(unittest.IsolatedAsyncioTestCase):
             await view.confirm.callback(interaction)
         record = self.db.marriage(1)
         self.assertIsNotNone(record)
-        with self.assertLogs("marriage", level="ERROR"):
+        with self.assertLogs("cogs.marriage", level="ERROR"):
             await view.on_error(error, view.confirm, interaction)
         self.assertEqual(self.db.marriage(1), record)
         interaction.followup.send.assert_awaited_once()

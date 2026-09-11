@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 os.environ["BOT_DATABASE_URL"] = "sqlite:///:memory:"
 
 from PIL import Image
-from leaderboard import Leaderboard, render_leaderboard
+from cogs.leaderboard import Leaderboard, render_leaderboard
 
 
 def portrait():

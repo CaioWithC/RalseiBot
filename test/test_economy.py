@@ -10,7 +10,7 @@ os.environ["BOT_DATABASE_URL"] = "sqlite:///:memory:"
 from nextcord.ext import commands
 
 from db import Database, MAX_BALANCE
-from economy import Economy, PaymentRequest
+from cogs.economy import Economy, PaymentRequest
 
 
 class PaymentTests(unittest.IsolatedAsyncioTestCase):
@@ -105,7 +105,7 @@ class PaymentTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(RuntimeError):
             await self.view.confirm.callback(interaction)
         self.view.message.edit.side_effect = None
-        with self.assertLogs("economy", level="ERROR"):
+        with self.assertLogs("cogs.economy", level="ERROR"):
             await self.view.on_error(error, self.view.confirm, interaction)
         self.assertIn("transferiu", interaction.followup.send.call_args.args[0])
         await self.view.confirm.callback(self.interaction(1))
@@ -114,7 +114,7 @@ class PaymentTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_self_and_bot_payments_are_rejected_before_prompt(self):
         ctx = SimpleNamespace(author=self.sender, send=AsyncMock())
-        with patch("economy.database", self.db):
+        with patch("cogs.economy.database", self.db):
             for member in (self.sender, SimpleNamespace(id=3, bot=True)):
                 with self.assertRaises(commands.BadArgument):
                     await Economy.pay.callback(Economy(None), ctx, member, 100)

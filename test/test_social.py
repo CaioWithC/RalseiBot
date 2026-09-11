@@ -16,7 +16,7 @@ import nextcord
 from nextcord.ext import commands
 from db import Database, EconomyError
 from main import create_bot
-from social import (normalize_background, parse_color, render_profile,
+from cogs.social import (normalize_background, parse_color, render_profile,
                     text_color, MAX_UPLOAD_BYTES, WIDTH, HEIGHT)
 
 

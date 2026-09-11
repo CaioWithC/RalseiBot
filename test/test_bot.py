@@ -16,10 +16,10 @@ os.environ["BOT_DATABASE_URL"] = "sqlite:///:memory:"
 from PIL import Image
 from nextcord.ext import commands
 from db import Database, EconomyError, MAX_BALANCE, database
-from amounts import parse_amount
-from game_rules import Blackjack, Mines, RNG, SLOT_SYMBOLS, hand_value, slot_multiplier, mines_multiplier
-from games import BlackjackView, MinesView, MineCountSelect, Games
-from leaderboard import render_leaderboard, Leaderboard
+from cogs.amounts import parse_amount
+from cogs.game_rules import Blackjack, Mines, RNG, SLOT_SYMBOLS, hand_value, slot_multiplier, mines_multiplier
+from cogs.games import BlackjackView, MinesView, MineCountSelect, Games
+from cogs.leaderboard import render_leaderboard, Leaderboard
 from main import create_bot
 
 
@@ -363,6 +363,12 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
     async def test_extensions_and_aliases_load_without_network(self):
         bot = create_bot()
         try:
+            self.assertEqual(set(bot.extensions), {
+                f"cogs.{name}" for name in (
+                    "economy", "leaderboard", "games", "social", "activities",
+                    "marriage", "roleplay", "sendmessage", "tickets", "slash_commands",
+                )
+            })
             for name in ("ping", "balance", "daily", "pay", "addbalance", "rich", "slots", "blackjack", "mines"):
                 self.assertIsNotNone(bot.get_command(name))
             for alias, name in (("top", "rich"), ("bj", "blackjack"), ("slot", "slots"), ("minas", "mines"), ("pix", "pay")):

@@ -9,7 +9,7 @@ os.environ["BOT_DATABASE_URL"] = "sqlite:///:memory:"
 
 import nextcord
 
-from activities import Activities, ACTIVITIES, ADMIN_REACTION_SECONDS, MANUAL_ACTIVITY_SECONDS
+from cogs.activities import Activities, ACTIVITIES, ADMIN_REACTION_SECONDS, MANUAL_ACTIVITY_SECONDS
 from db import EconomyError
 
 
@@ -167,7 +167,7 @@ class ActivityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_transport_failure_retries_without_losing_pending_activity(self):
         self.bot.change_presence.side_effect = [OSError("disconnected"), None]
-        with self.assertLogs("activities", level="WARNING"):
+        with self.assertLogs("cogs.activities", level="WARNING"):
             await self.cog.refresh()
         self.assertIsNone(self.cog.current_text)
         self.assertEqual(self.cog.rotation_index, 0)

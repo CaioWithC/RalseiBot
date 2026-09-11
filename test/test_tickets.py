@@ -11,7 +11,7 @@ os.environ["BOT_DATABASE_URL"] = "sqlite:///:memory:"
 import nextcord
 
 from db import Database
-from tickets import TicketPanel, Tickets, channel_slug
+from cogs.tickets import TicketPanel, Tickets, channel_slug
 
 
 class HashableObject:
@@ -55,7 +55,7 @@ class TicketTests(unittest.IsolatedAsyncioTestCase):
             followup=SimpleNamespace(send=AsyncMock()),
         )
         view = TicketPanel(SimpleNamespace(), self.db)
-        with patch("tickets.nextcord.CategoryChannel", FakeCategory):
+        with patch("cogs.tickets.nextcord.CategoryChannel", FakeCategory):
             await view.open_ticket.callback(interaction)
             category.text_channels.append(channel)
             await view.open_ticket.callback(interaction)
