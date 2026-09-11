@@ -7,7 +7,7 @@ import unittest
 
 os.environ["BOT_DATABASE_URL"] = "sqlite:///:memory:"
 
-from db import Database, EconomyError, MAX_BALANCE, next_daily_reset
+from db import Database, DailyClaim, MissionProgress, EconomyError, MAX_BALANCE, next_daily_reset
 
 
 class MissionTests(unittest.TestCase):
@@ -82,7 +82,9 @@ class MissionTests(unittest.TestCase):
         self.assertTrue(all(item["progress"] == 0 for item in self.status().values()))
 
     def test_concurrent_claims_only_pay_once(self):
-        self.db.daily(1, 100, now=self.now)
+        self.db.add_balance(1, 100)
+        with self.db.transaction() as session:
+            session.add(DailyClaim(discord_id="1", claimed_at=self.now))
 
         def claim(_):
             try:
@@ -93,6 +95,40 @@ class MissionTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=4) as workers:
             self.assertEqual(sum(workers.map(claim, range(8))), 2500)
         self.assertEqual(self.db.balance(1), 2600)
+
+    def test_saved_daily_receipt_repairs_missing_stale_and_zero_progress(self):
+        for old_progress in (None, "yesterday", "zero"):
+            with self.subTest(old_progress=old_progress):
+                user_id = str(old_progress)
+                with self.db.transaction() as session:
+                    session.add(DailyClaim(discord_id=user_id, claimed_at=self.now))
+                    if old_progress is not None:
+                        session.add(MissionProgress(
+                            discord_id=user_id, mission="daily",
+                            day_start=next_daily_reset(self.now) - (172800 if old_progress == "yesterday" else 86400),
+                            progress=1 if old_progress == "yesterday" else 0,
+                            claimed=1 if old_progress == "yesterday" else 0))
+                self.assertEqual(self.status(user=user_id)["daily"]["progress"], 1)
+                self.assertFalse(self.status(user=user_id)["daily"]["claimed"])
+                self.assertEqual(self.db.balance(user_id), 0)  # Viewing never credits money.
+                self.assertEqual(self.db.claim_missions(user_id, now=self.now), (2500, 2500))
+                self.assertTrue(self.status(user=user_id)["daily"]["claimed"])
+                with self.assertRaises(EconomyError):
+                    self.db.claim_missions(user_id, now=self.now)
+
+    def test_saved_receipt_can_be_claimed_without_viewing_missions(self):
+        with self.db.transaction() as session:
+            session.add(DailyClaim(discord_id="1", claimed_at=self.now))
+        self.assertEqual(self.db.claim_missions(1, now=self.now), (2500, 2500))
+
+    def test_old_or_future_daily_receipts_do_not_complete_today(self):
+        day_start = next_daily_reset(self.now) - 86400
+        for user_id, claimed_at in ((1, day_start - 1), (2, day_start + 86400)):
+            with self.db.transaction() as session:
+                session.add(DailyClaim(discord_id=str(user_id), claimed_at=claimed_at))
+            self.assertEqual(self.status(user=user_id)["daily"]["progress"], 0)
+            with self.assertRaises(EconomyError):
+                self.db.claim_missions(user_id, now=self.now)
 
 
 if __name__ == "__main__":

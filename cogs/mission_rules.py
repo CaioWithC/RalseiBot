@@ -11,7 +11,7 @@ class Mission:
 
 
 MISSIONS = (
-    Mission("daily", "Boas-vindas ao reino", 1, 2500),
+    Mission("daily", "Pegue daily hoje!", 1, 2500),
     Mission("work", "Um dia de trabalho", 1, 5000),
     Mission("freelance", "Talento independente", 3, 7500),
 )

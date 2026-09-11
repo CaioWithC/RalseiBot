@@ -202,10 +202,21 @@ class Database:
                 row.day_start, row.progress, row.claimed = day_start, 0, 0
             row.progress = min(definition.target, row.progress + 1)
 
+    def sync_daily_mission(self, session, discord_id, now):
+        """Repair missing progress from today's saved daily receipt, once."""
+        day_start = next_daily_reset(now) - 86400
+        claim = session.get(DailyClaim, str(discord_id))
+        if claim is None or not day_start <= claim.claimed_at < day_start + 86400:
+            return
+        row = session.get(MissionProgress, (str(discord_id), "daily"))
+        if row is None or row.day_start != day_start or row.progress < 1:
+            self.advance_mission(session, discord_id, "daily", now)
+
     def mission_status(self, discord_id, now=None):
-        now = int(time.time() if now is None else now)
-        reset_at = next_daily_reset(now)
-        with Session(self.engine) as session:
+        with self.transaction() as session:
+            now = int(time.time() if now is None else now)
+            reset_at = next_daily_reset(now)
+            self.sync_daily_mission(session, discord_id, now)
             rows = {row.mission: row for row in session.scalars(
                 select(MissionProgress).where(
                     MissionProgress.discord_id == str(discord_id),
@@ -220,6 +231,7 @@ class Database:
         with self.transaction() as session:
             now = int(time.time() if now is None else now)
             day_start = next_daily_reset(now) - 86400
+            self.sync_daily_mission(session, discord_id, now)
             completed = []
             for mission in MISSIONS:
                 row = session.get(MissionProgress, (str(discord_id), mission.key))
