@@ -2,8 +2,8 @@
 import nextcord
 from nextcord.ext import commands
 
-from command_support import InteractionContext
-from sendmessage import EmbedJSONModal
+from cogs.command_support import InteractionContext
+from cogs.sendmessage import EmbedJSONModal
 
 GUILD_ONLY = [nextcord.InteractionContextType.guild]
 ADMIN = nextcord.Permissions(administrator=True)

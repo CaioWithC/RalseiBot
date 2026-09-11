@@ -8,7 +8,7 @@ from aiohttp import ClientError
 import nextcord
 from nextcord.ext import commands, tasks
 
-from command_support import DualCommand, slash_name
+from cogs.command_support import DualCommand, slash_name
 from db import EconomyError
 
 log = logging.getLogger(__name__)

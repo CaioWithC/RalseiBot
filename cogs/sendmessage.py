@@ -2,7 +2,7 @@ import nextcord
 import json
 from nextcord.ext import commands
 
-from command_support import DualCommand
+from cogs.command_support import DualCommand
 
 
 def embed_from_json(value):

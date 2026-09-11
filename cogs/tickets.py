@@ -6,7 +6,7 @@ import unicodedata
 import nextcord
 from nextcord.ext import commands
 
-from command_support import DualCommand
+from cogs.command_support import DualCommand
 from db import EconomyError, database
 
 TICKET_BUTTON_ID = "ralseibot:open-ticket"

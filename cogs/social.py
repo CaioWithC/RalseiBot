@@ -10,8 +10,8 @@ from nextcord.ext import commands
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
 from db import database, EconomyError
-from leaderboard import font
-from command_support import DualCommand, DualGroup
+from cogs.leaderboard import font
+from cogs.command_support import DualCommand, DualGroup
 
 WIDTH, HEIGHT = 1000, 790
 HEADER_HEIGHT, BACKGROUND_HEIGHT = 190, 400

@@ -58,7 +58,7 @@ O ranking é global entre todos os usuários registrados e mostra o saldo dispon
 
 O botão **Retribuir** permite que quem recebeu o beijo, abraço ou carinho responda ao autor com a mesma ação e o próximo GIF. Cada botão pode ser usado uma vez e expira após 2 minutos sem interação. A resposta traz um novo botão para o outro participante e respeita os mesmos cooldowns dos comandos.
 
-`kiss`, `hug` e `pat` enviam embeds com os participantes mencionados, uma frase em português e um GIF grande. Cada comando sorteia um dos seus seis GIFs dos álbuns [kiss](https://imgur.com/a/E5nJtdx), [hug](https://imgur.com/a/gYHRVCv) e [pat](https://imgur.com/a/PLnbgn2) a cada uso, passando por todos antes de repetir. O último GIF de uma rodada nunca é o primeiro da próxima. A seleção é compartilhada entre servidores, prefixo/slash e o botão Retribuir, separada por ação, e recomeça ao reiniciar o bot. Os links diretos ficam em `roleplay.py`; alterações futuras nos álbuns precisam ser atualizadas ali.
+`kiss`, `hug` e `pat` enviam embeds com os participantes mencionados, uma frase em português e um GIF grande. Cada comando sorteia um dos seus seis GIFs dos álbuns [kiss](https://imgur.com/a/E5nJtdx), [hug](https://imgur.com/a/gYHRVCv) e [pat](https://imgur.com/a/PLnbgn2) a cada uso, passando por todos antes de repetir. O último GIF de uma rodada nunca é o primeiro da próxima. A seleção é compartilhada entre servidores, prefixo/slash e o botão Retribuir, separada por ação, e recomeça ao reiniciar o bot. Os links diretos ficam em `cogs/roleplay.py`; alterações futuras nos álbuns precisam ser atualizadas ali.
 
 Use em um servidor e escolha outro membro. Cada ação tem cooldown de 5 segundos por usuário, compartilhado entre prefixo e slash. Quando os dois participantes são casados entre si, a interação acrescenta de 1 a 3 pontos de afinidade e mostra o valor no rodapé. O total aparece em `r.marriage` e `/marriage` e persiste após reiniciar. A tabela `marriage_affinity` é criada automaticamente, preservando os casamentos existentes.
 
@@ -93,13 +93,13 @@ r.activity reset
 /activity text:reset
 ```
 
-Uma mensagem definida manualmente tem prioridade sobre as reações até expirar ou receber `reset`. A atividade do bot é **global, igual em todos os servidores**, e os textos temporários são descartados ao reiniciar. As frases e os intervalos podem ser editados em `activities.py`, nas listas `ACTIVITIES` e `ADMIN_REACTIONS` e nas constantes de tempo.
+Uma mensagem definida manualmente tem prioridade sobre as reações até expirar ou receber `reset`. A atividade do bot é **global, igual em todos os servidores**, e os textos temporários são descartados ao reiniciar. As frases e os intervalos podem ser editados em `cogs/activities.py`, nas listas `ACTIVITIES` e `ADMIN_REACTIONS` e nas constantes de tempo.
 
 O bot publica no máximo uma alteração a cada 10 segundos; em uma sequência rápida de comandos, prevalece a reação mais recente. Isso mantém as alterações abaixo do limite documentado de cinco atualizações em 20 segundos. Emojis são incluídos no próprio texto da atividade. [Referência de atividades e limites do Discord](https://docs.discord.com/developers/events/gateway-events#activity-object).
 
 ## Perfil social
 
-`social.py` gera um cartão de 1000×790: avatar circular e identidade no cabeçalho, posição no `r.rich` e saldo à direita, imagem personalizada no centro e Sobre mim no rodapé. A cor escolhida preenche o cabeçalho e o rodapé; a cor do texto muda automaticamente para manter a leitura. A posição e o saldo são consultados a cada visualização.
+`cogs/social.py` gera um cartão de 1000×790: avatar circular e identidade no cabeçalho, posição no `r.rich` e saldo à direita, imagem personalizada no centro e Sobre mim no rodapé. A cor escolhida preenche o cabeçalho e o rodapé; a cor do texto muda automaticamente para manter a leitura. A posição e o saldo são consultados a cada visualização.
 
 Para definir o fundo, anexe **uma imagem à mesma mensagem** que contém `r.profile background`, ou envie o arquivo na opção **image** de `/profile background`. São aceitos PNG, JPG, WebP e GIF, até 8 MB e 16 milhões de pixels. A imagem é recortada pelo centro para 1000×400; GIFs usam o primeiro quadro. O fundo é salvo no SQLite e continua disponível após reiniciar o bot. Use `r.profile background reset` ou `/profile background action:reset` para remover o fundo, e `r.profile about reset` ou `/profile about text:reset` para limpar a bio. Cada usuário altera apenas seu próprio perfil.
 

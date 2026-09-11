@@ -8,7 +8,7 @@ from nextcord.ext import commands
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from db import database, EconomyError
-from command_support import DualCommand
+from cogs.command_support import DualCommand
 
 MAX_IMAGE_PIXELS = 16_000_000
 

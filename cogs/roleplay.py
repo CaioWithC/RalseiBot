@@ -6,7 +6,7 @@ import random
 import nextcord
 from nextcord.ext import commands
 
-from command_support import DualCommand, InteractionContext
+from cogs.command_support import DualCommand, InteractionContext
 from db import database, EconomyError
 
 # Direct GIF URLs from the supplied albums, in album order.

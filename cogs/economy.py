@@ -7,8 +7,8 @@ import nextcord
 from nextcord.ext import commands
 
 from db import database, EconomyError
-from command_support import DualCommand
-from amounts import CoinAmount
+from cogs.command_support import DualCommand
+from cogs.amounts import CoinAmount
 
 
 log = logging.getLogger(__name__)
