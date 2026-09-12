@@ -44,7 +44,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.db.add_balance(self.author.id, 10_000)
         self.economy_patch = patch("cogs.economy.database", self.db)
         self.economy_patch.start()
-        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets", "Missions"):
+        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets", "Missions", "Confessions"):
             self.bot.get_cog(name).storage = self.db
         self.apps = {command.name: command for command in self.bot.get_all_application_commands()}
         self.views = []
@@ -162,9 +162,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             for alias in command.aliases:
                 prefix = f"{command.parent.qualified_name} " if command.parent else ""
                 self.assertIs(self.bot.get_command(prefix + alias), command)
-        for name in ("pay", "work", "addbalance", "setbalance", "resetbalance", "activity", "close"):
+        for name in ("pay", "work", "addbalance", "setbalance", "resetbalance", "activity", "close", "confess"):
             self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0])
-        for name in ("addbalance", "setbalance", "resetbalance", "activity"):
+        for name in ("addbalance", "setbalance", "resetbalance", "activity", "confess"):
             self.assertEqual(self.apps[name].get_payload(None)["default_member_permissions"], "8")
         for name in ("pay", "setbalance", "addbalance", "slots", "blackjack", "mines"):
             self.assertEqual(self.apps[name].options["amount"].type, nextcord.ApplicationCommandOptionType.string)
@@ -421,6 +421,51 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             result = await self.slash(name, guild=False, **options)
             self.assertIn("servidor", result.sent[0]["content"])
         self.assertEqual(self.db.balance(self.author.id), 10_000)
+
+    async def test_confess_setup_through_prefix_and_discord_channel_options(self):
+        interaction = self.interaction("confess", author=user(admin=True))
+        guild = interaction.guild
+        guild.default_role = object()
+        guild.me = object()
+        channels = []
+        for channel_id in (500, 600):
+            channel = Mock(spec=nextcord.TextChannel)
+            channel.id = channel_id
+            channel.guild = guild
+            channel.mention = f"<#{channel_id}>"
+            channel.send = AsyncMock()
+            channel.permissions_for.side_effect = lambda member: nextcord.Permissions(
+                view_channel=member is not guild.default_role, send_messages=True,
+                embed_links=True, attach_files=True)
+            channels.append(channel)
+        interaction.data["options"] = [
+            {"name": name, "type": 7, "value": str(channel.id)}
+            for name, channel in zip(("channel", "log_channel"), channels)
+        ]
+        with patch.object(self.bot._connection, "get_channel", side_effect={c.id: c for c in channels}.get):
+            await self.apps["confess"].call(self.bot._connection, interaction)
+        await asyncio.wait_for(interaction.received.wait(), timeout=3)
+        self.assertIn("Painel", interaction.sent[0]["content"])
+        self.assertEqual(self.db.confession_channels(guild.id), (500, 600))
+        interaction.response.defer.assert_awaited_once()
+        ctx = await self.prefix_context("r.confess <#500> <#600>", author=interaction.user)
+        ctx.guild = guild
+        with patch.object(commands.TextChannelConverter, "convert", AsyncMock(side_effect=channels)):
+            await ctx.command.invoke(ctx)
+        self.assertEqual(channels[0].send.await_count, 2)
+        self.assertTrue(channels[0].send.call_args.kwargs["view"].is_persistent())
+
+    async def test_confess_checks_admin_and_guild_in_both_formats(self):
+        for guild in (True, False):
+            interaction = self.interaction("confess", guild=guild)
+            # Resolved options still pass through the shared runtime checks.
+            await self.bot.get_cog("SlashCommands").invoke(
+                interaction, "confess", channel=Mock(), log_channel=Mock())
+            await asyncio.wait_for(interaction.received.wait(), timeout=3)
+            self.assertIn("administrador" if guild else "servidor", interaction.sent[0]["content"])
+            ctx = await self.prefix_context("r.confess <#500> <#600>", guild=guild)
+            with self.assertRaises(commands.MissingPermissions if guild else commands.NoPrivateMessage):
+                await ctx.command.invoke(ctx)
 
     async def test_close_ticket_prefix_aliases_and_slash(self):
         self.db.configure_tickets(321, 50)

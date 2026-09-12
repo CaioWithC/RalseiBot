@@ -366,7 +366,7 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(set(bot.extensions), {
                 f"cogs.{name}" for name in (
                     "economy", "leaderboard", "games", "social", "activities",
-                    "marriage", "roleplay", "sendmessage", "tickets", "missions", "slash_commands",
+                    "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "slash_commands",
                 )
             })
             for name in ("ping", "balance", "daily", "pay", "addbalance", "rich", "slots", "blackjack", "mines"):

@@ -35,6 +35,7 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.resetbalance @membro` | `/resetbalance member:@membro` | Zera o saldo disponível; somente administradores |
 | `r.activity Seu texto aqui` | `/activity text:Seu texto aqui` | Atividade personalizada por 5 minutos; somente administradores; aliases: `atividade`, `status`. Use `reset` para retomar a rotação |
 | `r.ticket Categoria` | `/ticket category:Categoria` | Publica um painel que cria tickets privados numerados; somente administradores |
+| `r.confess #confissões #logs-privados` | `/confess channel:#confissões log_channel:#logs-privados` | Configura e publica um painel de confissões anônimas com imagem opcional e registro do autor para a equipe; somente administradores |
 | `r.close` | `/close` | Fecha o ticket atual e exclui seu canal; somente o dono ou quem tem Gerenciar Canais; aliases: `fechar`, `closeticket` |
 | `r.rich [página]` | `/rich [page]` | PNG com 10 jogadores, posições, nomes e saldos; aliases: `richlist`, `leaderboard`, `top`, `rank` |
 | `r.profile [@usuário]` | `/profile view [member]` | Perfil em imagem com avatar, nome, ID, ranking, saldo, fundo e Sobre mim; alias: `perfil` |
@@ -54,6 +55,25 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 Nos comandos slash, preencha os campos que o Discord oferece; os itens entre colchetes são opcionais. O Discord exige um subcomando em grupos, então visualizar o perfil usa `/profile view`. Todos os aliases da tabela continuam disponíveis com `r.`. Os dois formatos executam os mesmos comandos, com as mesmas permissões, conversores, saldos e cooldowns; alternar entre prefixo e slash não permite repetir uma recompensa ou evitar o intervalo. Os comandos de administração alteram apenas o saldo disponível; apostas já iniciadas continuam com sua liquidação normal.
 
 O ranking é global entre todos os usuários registrados e mostra o saldo disponível, sem apostas em andamento. Empates são ordenados pelo ID do usuário. Nomes vêm do cache do Discord, com ID como alternativa. A imagem é desenhada localmente com Pillow, sem serviços de geração ou downloads de avatares.
+
+## Confissões anônimas
+
+Um administrador configura os canais e publica o painel com:
+
+```text
+r.confess #confissões #logs-privados
+/confess channel:#confissões log_channel:#logs-privados
+```
+
+O canal de logs precisa ser diferente do canal de confissões, com **Ver Canal negado para @everyone**. Libere o acesso somente aos cargos ou membros da equipe; o administrador deve conferir essas permissões. O bot precisa de **Ver Canal, Enviar Mensagens, Inserir Links e Anexar Arquivos** nos dois canais. Nenhuma permissão de canal é alterada pelo comando.
+
+Qualquer membro com acesso ao canal pode clicar em **Enviar confissão**, tanto no painel inicial quanto em cada confissão publicada. O formulário aceita texto obrigatório de até **4.000 caracteres** e o upload de **uma imagem opcional** (PNG, JPG, GIF ou WebP, até **8 MB**, respeitando também o limite do servidor, e 16 milhões de pixels). GIFs mantêm a animação. A imagem é reenviada como anexo do bot com nome de arquivo neutro. A confirmação do envio aparece somente para quem enviou.
+
+As confissões aparecem em embeds roxos numerados, sem usuário, avatar ou ID do autor. O painel e o formulário avisam que **a identidade é visível para a equipe**. O canal privado recebe o texto, a imagem, o usuário, o ID e o horário; após a publicação, o registro recebe o link da confissão. Menções não geram notificações. A confissão só é publicada se o registro privado for enviado com sucesso. Se a publicação falhar, o registro permanece e informa a falha quando possível.
+
+A configuração, a numeração por servidor e os IDs de atribuição ficam salvos no SQLite, nas tabelas `confession_configs` e `confessions`. Reiniciar ou reconfigurar não zera a numeração; tentativas interrompidas podem deixar números sem publicação. Os botões continuam funcionando depois de reiniciar. Ao mudar o canal, os painéis antigos ficam desativados; formulários já abertos precisam ser reabertos se a configuração mudar. Formulários expiram após 10 minutos sem interação e precisam ser reabertos após reiniciar o bot.
+
+`cogs/confessions.py` usa o componente de upload documentado pelo Discord por meio de uma subclasse de `nextcord.ui.Modal`, pois Nextcord 3.2 não fornece esse componente em `nextcord.ui`. A implementação preserva o envio e o despacho de interações da biblioteca. Referência: [File Upload em modais](https://docs.discord.com/developers/components/reference#file-upload).
 
 ## Missões diárias
 

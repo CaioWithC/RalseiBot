@@ -118,6 +118,26 @@ class TicketConfig(Base):
     next_number = Column(Integer, nullable=False, default=1)
 
 
+class ConfessionConfig(Base):
+    __tablename__ = "confession_configs"
+    guild_id = Column(String, primary_key=True)
+    channel_id = Column(String, nullable=False)
+    log_channel_id = Column(String, nullable=False)
+    next_number = Column(Integer, nullable=False, default=1)
+
+
+class Confession(Base):
+    __tablename__ = "confessions"
+    interaction_id = Column(String, primary_key=True)
+    guild_id = Column(String, nullable=False)
+    number = Column(Integer, nullable=False)
+    author_id = Column(String, nullable=False)
+    channel_id = Column(String, nullable=False)
+    log_channel_id = Column(String, nullable=False)
+    log_message_id = Column(String)
+    message_id = Column(String)
+
+
 class Database:
     def __init__(self, url):
         self.engine = create_engine(url, connect_args={"timeout": 10})
@@ -427,6 +447,45 @@ class Database:
             else:
                 affinity.points += points
             return points
+
+    def configure_confessions(self, guild_id, channel_id, log_channel_id):
+        with self.transaction() as session:
+            config = session.get(ConfessionConfig, str(guild_id))
+            if config is None:
+                config = ConfessionConfig(guild_id=str(guild_id), next_number=1)
+                session.add(config)
+            config.channel_id = str(channel_id)
+            config.log_channel_id = str(log_channel_id)
+
+    def confession_channels(self, guild_id):
+        with Session(self.engine) as session:
+            config = session.get(ConfessionConfig, str(guild_id))
+            return (int(config.channel_id), int(config.log_channel_id)) if config else None
+
+    def reserve_confession(self, guild_id, author_id, interaction_id, channels):
+        """Persist attribution and reserve a server-local number before posting."""
+        with self.transaction() as session:
+            config = session.get(ConfessionConfig, str(guild_id))
+            if config is None or (int(config.channel_id), int(config.log_channel_id)) != channels:
+                raise EconomyError("A configuração mudou. Abra o formulário novamente.")
+            if session.get(Confession, str(interaction_id)) is not None:
+                raise EconomyError("Esta confissão já foi recebida.")
+            number = config.next_number
+            config.next_number += 1
+            session.add(Confession(
+                interaction_id=str(interaction_id), guild_id=str(guild_id), number=number,
+                author_id=str(author_id), channel_id=config.channel_id,
+                log_channel_id=config.log_channel_id,
+            ))
+            return number
+
+    def mark_confession(self, interaction_id, *, log_message_id=None, message_id=None):
+        with self.transaction() as session:
+            record = session.get(Confession, str(interaction_id))
+            if log_message_id is not None:
+                record.log_message_id = str(log_message_id)
+            if message_id is not None:
+                record.message_id = str(message_id)
 
     def configure_tickets(self, guild_id, category_id):
         with self.transaction() as session:

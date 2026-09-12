@@ -53,6 +53,17 @@ class SlashCommands(commands.Cog):
                          channel_types=[nextcord.ChannelType.category])):
         await self.invoke(interaction, "ticket", category=category)
 
+    @nextcord.slash_command(name="confess", description="Administrador: configura os canais e publica o painel de confissões.",
+                            contexts=GUILD_ONLY, default_member_permissions=ADMIN)
+    async def confess(self, interaction: nextcord.Interaction,
+                      channel: nextcord.TextChannel = nextcord.SlashOption(
+                          description="Canal onde as confissões serão publicadas.",
+                          channel_types=[nextcord.ChannelType.text]),
+                      log_channel: nextcord.TextChannel = nextcord.SlashOption(
+                          description="Canal privado da equipe para registrar os autores.",
+                          channel_types=[nextcord.ChannelType.text])):
+        await self.invoke(interaction, "confess", channel=channel, log_channel=log_channel)
+
     @nextcord.slash_command(name="close", description="Fecha o ticket atual e exclui seu canal.", contexts=GUILD_ONLY)
     async def close(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "close")
