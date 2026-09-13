@@ -1,5 +1,6 @@
 ﻿"""Transactional DarkMoney storage, compatible with the original users table."""
 import os
+import json
 import secrets
 import time
 import uuid
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session, declarative_base
 from sqlalchemy.types import TypeDecorator
 
 from cogs.mission_rules import MISSIONS
+from cogs.quiz_rules import normalize_answer
 
 Base = declarative_base()
 MAX_BALANCE = 9_000_000_000_000_000
@@ -136,6 +138,44 @@ class Confession(Base):
     log_channel_id = Column(String, nullable=False)
     log_message_id = Column(String)
     message_id = Column(String)
+
+
+class QuizConfig(Base):
+    __tablename__ = "quiz_configs"
+    guild_id = Column(String, primary_key=True)
+    channel_id = Column(String, nullable=False)
+    review_channel_id = Column(String, nullable=False)
+    reward = Column(Integer, nullable=False)
+    enabled = Column(Integer, nullable=False, default=1)
+    next_at = Column(Integer, nullable=False)
+
+
+class QuizSuggestion(Base):
+    __tablename__ = "quiz_suggestions"
+    id = Column(String, primary_key=True)
+    guild_id = Column(String, nullable=False, index=True)
+    author_id = Column(String, nullable=False)
+    question = Column(String, nullable=False)
+    answers = Column(String, nullable=False)
+    created_at = Column(Integer, nullable=False)
+    status = Column(String, nullable=False, default="pending")
+    review_channel_id = Column(String, nullable=False)
+    message_id = Column(String, unique=True)
+    moderator_id = Column(String)
+
+
+class QuizRound(Base):
+    __tablename__ = "quiz_rounds"
+    id = Column(String, primary_key=True)
+    guild_id = Column(String, nullable=False, index=True)
+    channel_id = Column(String, nullable=False)
+    message_id = Column(String)
+    question = Column(String, nullable=False)
+    answers = Column(String, nullable=False)
+    reward = Column(Integer, nullable=False)
+    expires_at = Column(Integer, nullable=False)
+    status = Column(String, nullable=False, default="sending")
+    winner_id = Column(String)
 
 
 class Database:
@@ -510,6 +550,143 @@ class Database:
             number = config.next_number
             config.next_number += 1
             return number
+
+    @staticmethod
+    def quiz_data(row):
+        return {column.name: getattr(row, column.name) for column in row.__table__.columns}
+
+    def quiz_config(self, guild_id):
+        with Session(self.engine) as session:
+            row = session.get(QuizConfig, str(guild_id))
+            return self.quiz_data(row) if row else None
+
+    def quiz_configs(self):
+        with Session(self.engine) as session:
+            return [self.quiz_data(row) for row in session.scalars(select(QuizConfig).where(QuizConfig.enabled == 1))]
+
+    def configure_quiz(self, guild_id, channel_id, review_channel_id, reward, next_at):
+        self.positive(reward, maximum=100_000)
+        with self.transaction() as session:
+            row = session.get(QuizConfig, str(guild_id))
+            if row is None:
+                row = QuizConfig(guild_id=str(guild_id))
+                session.add(row)
+            row.channel_id, row.review_channel_id = str(channel_id), str(review_channel_id)
+            row.reward, row.next_at, row.enabled = reward, next_at, 1
+            for active in session.scalars(select(QuizRound).where(
+                    QuizRound.guild_id == str(guild_id), QuizRound.status.in_(["sending", "active"]))):
+                active.status = "cancelled"
+
+    def disable_quiz(self, guild_id):
+        with self.transaction() as session:
+            row = session.get(QuizConfig, str(guild_id))
+            if row:
+                row.enabled = 0
+            for active in session.scalars(select(QuizRound).where(
+                    QuizRound.guild_id == str(guild_id), QuizRound.status.in_(["sending", "active"]))):
+                active.status = "cancelled"
+
+    def submit_quiz_suggestion(self, suggestion_id, guild_id, author_id, question, answers, review_channel_id, now):
+        with self.transaction() as session:
+            if session.get(QuizSuggestion, str(suggestion_id)):
+                raise EconomyError("Esta sugestão já foi enviada.")
+            pending = session.scalar(select(func.count()).select_from(QuizSuggestion).where(
+                QuizSuggestion.guild_id == str(guild_id), QuizSuggestion.author_id == str(author_id),
+                QuizSuggestion.status == "pending"))
+            recent = session.scalar(select(QuizSuggestion).where(
+                QuizSuggestion.guild_id == str(guild_id), QuizSuggestion.author_id == str(author_id),
+                QuizSuggestion.created_at > now - 60))
+            if pending >= 3 or recent:
+                raise EconomyError("Aguarde 1 minuto entre sugestões e mantenha no máximo 3 pendentes.")
+            session.add(QuizSuggestion(id=str(suggestion_id), guild_id=str(guild_id), author_id=str(author_id),
+                question=question, answers=json.dumps(answers, ensure_ascii=False), created_at=now,
+                review_channel_id=str(review_channel_id)))
+
+    def mark_quiz_suggestion(self, suggestion_id, message_id=None, failed=False):
+        with self.transaction() as session:
+            row = session.get(QuizSuggestion, str(suggestion_id))
+            if failed:
+                row.status = "failed"
+            else:
+                row.message_id = str(message_id)
+
+    def review_quiz_suggestion(self, guild_id, channel_id, message_id, moderator_id, approve):
+        with self.transaction() as session:
+            row = session.scalar(select(QuizSuggestion).where(
+                QuizSuggestion.guild_id == str(guild_id), QuizSuggestion.review_channel_id == str(channel_id),
+                QuizSuggestion.message_id == str(message_id)))
+            if row is None or row.status != "pending":
+                raise EconomyError("Esta sugestão já foi avaliada ou não está disponível.")
+            row.status = "approved" if approve else "rejected"
+            row.moderator_id = str(moderator_id)
+            return self.quiz_data(row)
+
+    def approved_quiz_questions(self, guild_id):
+        with Session(self.engine) as session:
+            return [(row.question, json.loads(row.answers)) for row in session.scalars(
+                select(QuizSuggestion).where(QuizSuggestion.guild_id == str(guild_id),
+                                            QuizSuggestion.status == "approved"))]
+
+    def quiz_round(self, guild_id):
+        with Session(self.engine) as session:
+            row = session.scalar(select(QuizRound).where(
+                QuizRound.guild_id == str(guild_id), QuizRound.status == "active"))
+            return self.quiz_data(row) if row else None
+
+    def prepare_quiz_round(self, guild_id, question, answers, now, expires_at, next_at):
+        with self.transaction() as session:
+            config = session.get(QuizConfig, str(guild_id))
+            active = session.scalar(select(QuizRound).where(
+                QuizRound.guild_id == str(guild_id), QuizRound.status.in_(["sending", "active"])))
+            if not config or not config.enabled or config.next_at > now or active:
+                return None
+            row = QuizRound(id=uuid.uuid4().hex, guild_id=str(guild_id), channel_id=config.channel_id,
+                question=question, answers=json.dumps(answers, ensure_ascii=False), reward=config.reward,
+                expires_at=expires_at, status="sending")
+            session.add(row)
+            config.next_at = next_at
+            session.flush()
+            return self.quiz_data(row)
+
+    def publish_quiz_round(self, round_id, message_id):
+        with self.transaction() as session:
+            row = session.get(QuizRound, round_id)
+            if row.status == "sending":
+                row.message_id, row.status = str(message_id), "active"
+
+    def cancel_quiz_round(self, round_id):
+        with self.transaction() as session:
+            row = session.get(QuizRound, round_id)
+            if row and row.status in ("sending", "active"):
+                row.status = "cancelled"
+
+    def recover_quiz_rounds(self):
+        with self.transaction() as session:
+            for row in session.scalars(select(QuizRound).where(QuizRound.status == "sending")):
+                row.status = "cancelled"
+
+    def expire_quiz_round(self, round_id, now):
+        with self.transaction() as session:
+            row = session.get(QuizRound, round_id)
+            if row and row.status == "active" and now >= row.expires_at:
+                row.status = "expired"
+                return True
+            return False
+
+    def answer_quiz(self, round_id, guild_id, channel_id, user_id, message_id, answer, now):
+        """Claim the round and credit the first correct answer in one transaction."""
+        with self.transaction() as session:
+            row = session.get(QuizRound, round_id)
+            if (row is None or row.status != "active" or row.guild_id != str(guild_id)
+                    or row.channel_id != str(channel_id) or now >= row.expires_at
+                    or int(message_id) <= int(row.message_id)):
+                return None
+            if normalize_answer(answer) not in {normalize_answer(value) for value in json.loads(row.answers)}:
+                return None
+            user = self.user(session, user_id)
+            self.credit(user, row.reward)
+            row.winner_id, row.status = str(user_id), "won"
+            return row.reward
 
 
 database = Database(os.getenv("BOT_DATABASE_URL", "sqlite:///" +

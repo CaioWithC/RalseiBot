@@ -68,6 +68,27 @@ class SlashCommands(commands.Cog):
     async def close(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "close")
 
+    @nextcord.slash_command(name="quiz", description="Administrador: configura o quiz automático e publica o painel de sugestões.",
+                            contexts=GUILD_ONLY, default_member_permissions=ADMIN)
+    async def quiz(self, interaction: nextcord.Interaction,
+                   channel: nextcord.TextChannel = nextcord.SlashOption(
+                       description="Chat onde as perguntas aparecerão.", channel_types=[nextcord.ChannelType.text]),
+                   review_channel: nextcord.TextChannel = nextcord.SlashOption(
+                       description="Canal privado da equipe para aprovar sugestões.", channel_types=[nextcord.ChannelType.text]),
+                   reward: int = nextcord.SlashOption(description="Prêmio em D$ (padrão: 1.000).", min_value=1,
+                                                      max_value=100_000, default=1000, required=False)):
+        await self.invoke(interaction, "quiz", channel=channel, review_channel=review_channel, reward=reward)
+
+    @nextcord.slash_command(name="quizpanel", description="Administrador: publica o botão para sugerir perguntas do quiz.",
+                            contexts=GUILD_ONLY, default_member_permissions=ADMIN)
+    async def quizpanel(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "quizpanel")
+
+    @nextcord.slash_command(name="quizoff", description="Administrador: desativa o quiz automático.",
+                            contexts=GUILD_ONLY, default_member_permissions=ADMIN)
+    async def quizoff(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "quizoff")
+
     @nextcord.slash_command(name="kiss", description="Beije alguém com um GIF.", contexts=GUILD_ONLY)
     async def kiss(self, interaction: nextcord.Interaction,
                    member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá o beijo.")):

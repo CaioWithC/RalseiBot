@@ -44,7 +44,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.db.add_balance(self.author.id, 10_000)
         self.economy_patch = patch("cogs.economy.database", self.db)
         self.economy_patch.start()
-        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets", "Missions", "Confessions"):
+        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets", "Missions", "Confessions", "Quiz"):
             self.bot.get_cog(name).storage = self.db
         self.apps = {command.name: command for command in self.bot.get_all_application_commands()}
         self.views = []
@@ -162,9 +162,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             for alias in command.aliases:
                 prefix = f"{command.parent.qualified_name} " if command.parent else ""
                 self.assertIs(self.bot.get_command(prefix + alias), command)
-        for name in ("pay", "work", "addbalance", "setbalance", "resetbalance", "activity", "close", "confess"):
+        for name in ("pay", "work", "addbalance", "setbalance", "resetbalance", "activity", "close", "confess", "quiz", "quizpanel", "quizoff"):
             self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0])
-        for name in ("addbalance", "setbalance", "resetbalance", "activity", "confess"):
+        for name in ("addbalance", "setbalance", "resetbalance", "activity", "confess", "quiz", "quizpanel", "quizoff"):
             self.assertEqual(self.apps[name].get_payload(None)["default_member_permissions"], "8")
         for name in ("pay", "setbalance", "addbalance", "slots", "blackjack", "mines"):
             self.assertEqual(self.apps[name].options["amount"].type, nextcord.ApplicationCommandOptionType.string)
@@ -466,6 +466,51 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             ctx = await self.prefix_context("r.confess <#500> <#600>", guild=guild)
             with self.assertRaises(commands.MissingPermissions if guild else commands.NoPrivateMessage):
                 await ctx.command.invoke(ctx)
+
+    async def test_quiz_setup_with_discord_options_and_prefix_panel_and_disable(self):
+        interaction = self.interaction("quiz", author=user(admin=True))
+        guild = interaction.guild
+        guild.default_role, guild.me = object(), object()
+        channels = []
+        for channel_id in (500, 600):
+            channel = Mock(spec=nextcord.TextChannel)
+            channel.id, channel.guild, channel.mention = channel_id, guild, f"<#{channel_id}>"
+            channel.permissions_for.side_effect = lambda member: nextcord.Permissions(
+                view_channel=member is not guild.default_role, send_messages=True, embed_links=True)
+            channels.append(channel)
+        interaction.data["options"] = [
+            {"name": name, "type": 7, "value": str(channel.id)}
+            for name, channel in zip(("channel", "review_channel"), channels)
+        ] + [{"name": "reward", "type": 4, "value": 2500}]
+        with patch.object(self.bot._connection, "get_channel", side_effect={c.id: c for c in channels}.get):
+            await self.apps["quiz"].call(self.bot._connection, interaction)
+        await asyncio.wait_for(interaction.received.wait(), timeout=3)
+        self.assertEqual(self.db.quiz_config(guild.id)["reward"], 2500)
+        self.assertTrue(interaction.sent[0]["view"].is_persistent())
+        ctx = await self.prefix_context("r.quiz <#500> <#600>", author=interaction.user)
+        ctx.guild = guild
+        with patch.object(commands.TextChannelConverter, "convert", AsyncMock(side_effect=channels)):
+            await ctx.command.invoke(ctx)
+        self.assertEqual(self.db.quiz_config(guild.id)["reward"], 1000)
+        panel = await self.slash("quizpanel", author=interaction.user)
+        self.assertTrue(panel.sent[0]["view"].is_persistent())
+        ctx = await self.prefix_context("r.quizoff", author=interaction.user)
+        await ctx.command.invoke(ctx)
+        self.assertFalse(self.db.quiz_config(guild.id)["enabled"])
+        panel = await self.slash("quizpanel", author=interaction.user)
+        self.assertIn("Configure primeiro", panel.sent[0]["content"])
+
+    async def test_quiz_commands_check_admin_and_guild_at_runtime(self):
+        for name in ("quiz", "quizpanel", "quizoff"):
+            for guild in (True, False):
+                interaction = self.interaction(name, guild=guild)
+                options = {"channel": Mock(), "review_channel": Mock()} if name == "quiz" else {}
+                await self.bot.get_cog("SlashCommands").invoke(interaction, name, **options)
+                await asyncio.wait_for(interaction.received.wait(), timeout=3)
+                self.assertIn("administrador" if guild else "servidor", interaction.sent[0]["content"])
+                ctx = await self.prefix_context("r." + name, guild=guild)
+                with self.assertRaises(commands.MissingPermissions if guild else commands.NoPrivateMessage):
+                    await ctx.command.invoke(ctx)
 
     async def test_close_ticket_prefix_aliases_and_slash(self):
         self.db.configure_tickets(321, 50)

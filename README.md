@@ -35,6 +35,9 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.resetbalance @membro` | `/resetbalance member:@membro` | Zera o saldo disponível; somente administradores |
 | `r.activity Seu texto aqui` | `/activity text:Seu texto aqui` | Atividade personalizada por 5 minutos; somente administradores; aliases: `atividade`, `status`. Use `reset` para retomar a rotação |
 | `r.ticket Categoria` | `/ticket category:Categoria` | Publica um painel que cria tickets privados numerados; somente administradores |
+| `r.quiz #chat #revisao [premio]` | `/quiz channel:#chat review_channel:#revisao [reward]` | Ativa o quiz automático e publica o painel de sugestões; somente administradores |
+| `r.quizpanel` | `/quizpanel` | Publica outro painel de sugestões; somente administradores |
+| `r.quizoff` | `/quizoff` | Desativa o quiz e cancela a rodada atual; somente administradores |
 | `r.confess #confissões #logs-privados` | `/confess channel:#confissões log_channel:#logs-privados` | Configura e publica um painel de confissões anônimas com imagem opcional e registro do autor para a equipe; somente administradores |
 | `r.close` | `/close` | Fecha o ticket atual e exclui seu canal; somente o dono ou quem tem Gerenciar Canais; aliases: `fechar`, `closeticket` |
 | `r.rich [página]` | `/rich [page]` | PNG com 10 jogadores, posições, nomes e saldos; aliases: `richlist`, `leaderboard`, `top`, `rank` |
@@ -55,6 +58,27 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 Nos comandos slash, preencha os campos que o Discord oferece; os itens entre colchetes são opcionais. O Discord exige um subcomando em grupos, então visualizar o perfil usa `/profile view`. Todos os aliases da tabela continuam disponíveis com `r.`. Os dois formatos executam os mesmos comandos, com as mesmas permissões, conversores, saldos e cooldowns; alternar entre prefixo e slash não permite repetir uma recompensa ou evitar o intervalo. Os comandos de administração alteram apenas o saldo disponível; apostas já iniciadas continuam com sua liquidação normal.
 
 O ranking é global entre todos os usuários registrados e mostra o saldo disponível, sem apostas em andamento. Empates são ordenados pelo ID do usuário. Nomes vêm do cache do Discord, com ID como alternativa. A imagem é desenhada localmente com Pillow, sem serviços de geração ou downloads de avatares.
+
+## Quiz automático
+
+Um administrador ativa o quiz e publica o painel de sugestões no canal em que executar:
+
+```text
+r.quiz #chat-geral #revisao-quiz 1000
+/quiz channel:#chat-geral review_channel:#revisao-quiz reward:1000
+```
+
+O prêmio é opcional: **1.000 D$** por padrão, configurável entre 1 e 100.000 D$. Há um canal de quiz por servidor. O canal de revisão precisa ser diferente, com **Ver Canal negado para @everyone**; libere somente a equipe, pois as respostas aparecem ali. O bot precisa de **Ver Canal, Enviar Mensagens e Inserir Links** nos dois canais e no canal do painel.
+
+A primeira pergunta pode aparecer após **30–60 minutos** da ativação. Cada publicação sorteia outro intervalo de 30–60 minutos. Quando o horário chega, o bot só publica se houver **pelo menos 5 mensagens de 2 pessoas nos últimos 10 minutos** no canal configurado. Mensagens de bots, webhooks, mensagens vazias e comandos `r.` não contam. Se o chat estiver parado, aguarda movimento; não acumula perguntas atrasadas. A verificação ocorre a cada 15 segundos.
+
+Cada rodada dura **2 minutos**. Responda diretamente no chat: a primeira resposta correta processada ganha o prêmio no saldo global. Maiúsculas, acentos, espaços extras e pontuação simples nas extremidades são ignorados; é preciso responder apenas com a resposta ou uma das escritas aceitas, sem frases extras. Edições não contam. Sem acertos, o bot revela a resposta e não paga ninguém. O banco registra o vencedor e o crédito na mesma transação para impedir pagamentos duplicados, inclusive após reiniciar.
+
+O bot já inclui 10 perguntas de matemática e português. O botão **Sugerir pergunta** abre um modal com pergunta, resposta correta e até 9 outras escritas aceitas, uma por linha. A sugestão vai para o canal de revisão com a identificação do autor. Quem tem **Gerenciar Mensagens** no servidor ou é administrador pode **Aprovar** ou **Recusar**. Somente sugestões aprovadas entram no sorteio daquele servidor. Cada pessoa pode manter até 3 sugestões pendentes e enviar uma por minuto.
+
+Use **`r.quizpanel` ou `/quizpanel`** para publicar outro painel no canal atual. **`r.quizoff` ou `/quizoff`** desativa o quiz e cancela a rodada atual. Esses comandos são exclusivos de administradores. Executar `quiz` novamente reconfigura o canal/prêmio, cancela a rodada atual e reinicia o intervalo, preservando as perguntas aprovadas.
+
+Configurações, sugestões, decisões, prêmios e rodadas ficam nas tabelas `quiz_configs`, `quiz_suggestions` e `quiz_rounds`, criadas automaticamente. Painéis e botões de revisão continuam funcionando após reiniciar. Uma rodada publicada mantém seu prazo original; o histórico de atividade começa vazio após reiniciar. Formulários abertos precisam ser reabertos após reiniciar e expiram em 10 minutos. Uma publicação interrompida antes de registrar o ID da mensagem é cancelada na inicialização; falhas de envio aguardam o próximo intervalo. Execute uma instância do bot por banco, como nos outros jogos.
 
 ## Confissões anônimas
 
