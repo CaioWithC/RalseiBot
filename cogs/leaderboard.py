@@ -8,16 +8,19 @@ from nextcord.ext import commands
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from db import database, EconomyError
-from command_support import DualCommand
+from cogs.command_support import DualCommand
 
 MAX_IMAGE_PIXELS = 16_000_000
 
 def font(size, bold=False):
+    """Use Unicode fonts for every card, including Linux/Docker deployments."""
     filename = "arialbd.ttf" if bold else "arial.ttf"
-    windows = Path("C:/Windows/Fonts") / ("arialbd.ttf" if bold else "arial.ttf")
-    for candidate in (filename, str(windows)):
+    windows = Path("C:/Windows/Fonts") / filename
+    dejavu = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+    linux = Path("/usr/share/fonts/truetype/dejavu") / dejavu
+    for candidate in (filename, str(windows), str(linux), dejavu):
         try:
-            return ImageFont.truetype(candidate, size)
+            return ImageFont.truetype(candidate, size, encoding="unic")
         except OSError:
             pass
     return ImageFont.load_default(size=size)

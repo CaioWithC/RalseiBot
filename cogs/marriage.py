@@ -8,10 +8,10 @@ import nextcord
 from nextcord.ext import commands
 from PIL import Image, ImageDraw, ImageOps
 
-from command_support import DualCommand
+from cogs.command_support import DualCommand
 from db import database, EconomyError
-from leaderboard import font, fit
-from social import MAX_IMAGE_PIXELS
+from cogs.leaderboard import font, fit
+from cogs.social import MAX_IMAGE_PIXELS
 
 log = logging.getLogger(__name__)
 PINK = 0xCF59FF

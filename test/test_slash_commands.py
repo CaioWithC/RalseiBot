@@ -15,8 +15,9 @@ from PIL import Image
 
 from db import Database
 from main import create_bot, error_message
-from game_rules import Blackjack
-from social import MAX_UPLOAD_BYTES
+from cogs.game_rules import Blackjack
+from cogs.command_support import slash_name
+from cogs.social import MAX_UPLOAD_BYTES
 
 
 def png():
@@ -42,9 +43,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.author = user()
         self.member = user(222222222222222222)
         self.db.add_balance(self.author.id, 10_000)
-        self.economy_patch = patch("economy.database", self.db)
+        self.economy_patch = patch("cogs.economy.database", self.db)
         self.economy_patch.start()
-        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay"):
+        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets", "Missions", "Confessions", "Quiz", "Uno"):
             self.bot.get_cog(name).storage = self.db
         self.apps = {command.name: command for command in self.bot.get_all_application_commands()}
         self.views = []
@@ -62,7 +63,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         received = asyncio.Event()
         response = SimpleNamespace(is_done=Mock(return_value=False))
 
-        async def defer():
+        async def defer(**kwargs):
             response.is_done.return_value = True
 
         interaction = SimpleNamespace(
@@ -123,6 +124,28 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         ctx.send = AsyncMock()
         return ctx
 
+    async def test_missions_share_progress_and_claims_across_prefix_and_slash(self):
+        await self.slash("daily")
+        await self.slash("work")
+        ctx = await self.prefix_context("r.freelas")
+        await self.bot.invoke(ctx)
+        self.assertFalse(ctx.command_failed)
+        statuses, _ = self.db.mission_status(self.author.id)
+        self.assertEqual([item["progress"] for item in statuses], [1, 1, 1])
+        balance = self.db.balance(self.author.id)
+        viewed = await self.slash("missions")
+        self.assertEqual(len(viewed.sent[-1]["embed"].fields), 3)
+        ctx = await self.prefix_context("r.missoes claim")
+        await self.bot.invoke(ctx)
+        self.assertIn("7,500", ctx.send.call_args.args[0])
+        self.assertEqual(self.db.balance(self.author.id), balance + 7500)
+        repeated = await self.slash("missions", action="claim")
+        self.assertIn("Nenhuma recompensa", repeated.sent[-1]["content"])
+        self.assertEqual(self.db.balance(self.author.id), balance + 7500)
+        await self.slash("freelance")  # Shared cooldown must not advance progress.
+        statuses, _ = self.db.mission_status(self.author.id)
+        self.assertEqual(statuses[2]["progress"], 1)
+
     async def test_every_prefix_command_has_a_registered_slash_equivalent(self):
         registered = set()
         for app in self.apps.values():
@@ -132,17 +155,34 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
                 registered.update(f"{app.name} {child}" for child in app.children)
             else:
                 registered.add(app.name)
-        expected = {"profile view" if c.qualified_name == "profile" else c.qualified_name
-                    for c in self.bot.walk_commands()}
+        expected = {slash_name(c) for c in self.bot.walk_commands()}
         self.assertEqual(registered, expected)
         self.assertEqual(self.bot.command_prefix, "r.")
+
+    async def test_six_slash_is_private_and_uno_prefix_opens_the_same_panel(self):
+        channel = Mock(spec=nextcord.TextChannel)
+        channel.id = 123
+        interaction = self.interaction("six iniciar")
+        interaction.channel = channel
+        interaction.data["options"] = [{"name": "iniciar", "type": 1, "options": []}]
+        await self.apps["six"].call(self.bot._connection, interaction)
+        await asyncio.wait_for(interaction.received.wait(), timeout=3)
+        interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+        self.assertTrue(interaction.sent[-1]["ephemeral"])
+        self.assertIn("Uno", interaction.sent[-1]["embed"].title)
+        ctx = await self.prefix_context("r.uno iniciar")
+        ctx.message.channel = channel
+        await self.bot.invoke(ctx)
+        self.assertFalse(ctx.command_failed)
+        self.assertEqual(ctx.send.call_args.kwargs["embed"].title, interaction.sent[-1]["embed"].title)
+        self.views.append(ctx.send.call_args.kwargs["view"])
         for command in self.bot.walk_commands():
             for alias in command.aliases:
                 prefix = f"{command.parent.qualified_name} " if command.parent else ""
                 self.assertIs(self.bot.get_command(prefix + alias), command)
-        for name in ("pay", "work", "addbalance", "setbalance", "resetbalance", "activity"):
+        for name in ("pay", "work", "addbalance", "setbalance", "resetbalance", "activity", "close", "confess", "quiz", "quizpanel", "quizoff"):
             self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0])
-        for name in ("addbalance", "setbalance", "resetbalance", "activity"):
+        for name in ("addbalance", "setbalance", "resetbalance", "activity", "confess", "quiz", "quizpanel", "quizoff"):
             self.assertEqual(self.apps[name].get_payload(None)["default_member_permissions"], "8")
         for name in ("pay", "setbalance", "addbalance", "slots", "blackjack", "mines"):
             self.assertEqual(self.apps[name].options["amount"].type, nextcord.ApplicationCommandOptionType.string)
@@ -150,12 +190,13 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
                          nextcord.ApplicationCommandOptionType.attachment)
 
     async def test_roleplay_prefix_and_slash_share_rotation_cooldowns_and_affinity(self):
-        from roleplay import GIFS
+        from cogs.roleplay import GIFS
         self.db.marry(self.author.id, self.member.id)
         for name, alias in (("kiss", "beijar"), ("hug", "abracar"), ("pat", "carinho")):
             self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0])
             result = await self.slash(name, member=self.member)
-            self.assertEqual(result.sent[0]["embed"].image.url, GIFS[name][0])
+            first_gif = result.sent[0]["embed"].image.url
+            self.assertIn(first_gif, GIFS[name])
             ctx = await self.prefix_context(f"r.{alias} <@{self.member.id}>")
             with self.assertRaises(commands.CommandOnCooldown):
                 await ctx.command.invoke(ctx)
@@ -163,7 +204,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             ctx = await self.prefix_context(f"r.{alias} <@{self.member.id}>")
             with patch.object(commands.MemberConverter, "convert", new=AsyncMock(return_value=self.member)):
                 await ctx.command.invoke(ctx)
-            self.assertEqual(ctx.send.call_args.kwargs["embed"].image.url, GIFS[name][1])
+            next_gif = ctx.send.call_args.kwargs["embed"].image.url
+            self.assertIn(next_gif, GIFS[name])
+            self.assertNotEqual(next_gif, first_gif)
             result = await self.slash(name, member=self.member)
             self.assertIn("Aguarde", result.sent[0]["content"])
             result = await self.slash(name, member=self.member, guild=False)
@@ -171,7 +214,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(6 <= self.db.marriage(self.author.id)["affinity"] <= 18)
 
     async def test_reciprocate_swaps_participants_rotates_gif_and_prevents_duplicate_clicks(self):
-        from roleplay import GIFS
+        from cogs.roleplay import GIFS
         self.db.marry(self.author.id, self.member.id)
         for action in GIFS:
             original = await self.slash(action, member=self.member)
@@ -185,13 +228,14 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             first = self.interaction(action, author=self.member)
             second = self.interaction(action, author=self.member)
             first.message = second.message = view.message
-            with patch("roleplay.random.randint", return_value=2):
+            with patch("cogs.roleplay.random.randint", return_value=2):
                 before = self.db.marriage(self.author.id)["affinity"]
                 await asyncio.gather(view.reciprocate.callback(first), view.reciprocate.callback(second))
             self.assertEqual(self.db.marriage(self.author.id)["affinity"], before + 2)
             embed = first.sent[0]["embed"]
             self.assertLess(embed.description.index(str(self.member.id)), embed.description.index(str(self.author.id)))
-            self.assertEqual(embed.image.url, GIFS[action][1])
+            self.assertIn(embed.image.url, GIFS[action])
+            self.assertNotEqual(embed.image.url, original.sent[0]["embed"].image.url)
             self.assertTrue(view.reciprocate.disabled)
             self.assertTrue(view.is_finished())
             self.assertIn("já foi retribuída", second.sent[0]["content"])
@@ -207,7 +251,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             retry = self.interaction(action, author=self.author)
             retry.message = reply_view.message
             await reply_view.reciprocate.callback(retry)
-            self.assertEqual(retry.sent[0]["embed"].image.url, GIFS[action][2])
+            retry_gif = retry.sent[0]["embed"].image.url
+            self.assertIn(retry_gif, GIFS[action])
+            self.assertNotIn(retry_gif, (original.sent[0]["embed"].image.url, embed.image.url))
             self.assertTrue(reply_view.done)
 
     async def test_reciprocate_timeout_disables_button_without_awarding_points(self):
@@ -232,7 +278,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_ping_balance_daily_and_work_use_existing_handlers(self):
         self.assertEqual((await self.slash("ping")).sent[0]["content"], "Pong!")
         self.assertIn("10,000", (await self.slash("balance")).sent[0]["content"])
-        with patch("economy.random.randint", return_value=5000):
+        with patch("cogs.economy.random.randint", return_value=5000):
             await self.slash("daily")
             await self.slash("work")
         self.assertEqual(self.db.balance(self.author.id), 20_000)
@@ -338,14 +384,14 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_daily_shares_midnight_reset_and_relative_timestamps_across_both_formats(self):
         midnight = int(datetime.fromisoformat("2026-09-08T03:00:00+00:00").timestamp())
-        with patch("economy.random.randint", return_value=5000), patch("db.time.time", return_value=midnight - 1):
+        with patch("cogs.economy.random.randint", return_value=5000), patch("db.time.time", return_value=midnight - 1):
             await self.slash("daily")
             ctx = await self.prefix_context("r.daily")
             await self.bot.invoke(ctx)
             await asyncio.sleep(0)
             self.assertIn(f"<t:{midnight}:R>", ctx.send.call_args.args[0])
             self.assertEqual(self.db.balance(self.author.id), 15000)
-        with patch("economy.random.randint", return_value=5000), patch("db.time.time", return_value=midnight):
+        with patch("cogs.economy.random.randint", return_value=5000), patch("db.time.time", return_value=midnight):
             ctx = await self.prefix_context("r.daily")
             await self.bot.invoke(ctx)
             await asyncio.sleep(0)
@@ -394,6 +440,131 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("servidor", result.sent[0]["content"])
         self.assertEqual(self.db.balance(self.author.id), 10_000)
 
+    async def test_confess_setup_through_prefix_and_discord_channel_options(self):
+        interaction = self.interaction("confess", author=user(admin=True))
+        guild = interaction.guild
+        guild.default_role = object()
+        guild.me = object()
+        channels = []
+        for channel_id in (500, 600):
+            channel = Mock(spec=nextcord.TextChannel)
+            channel.id = channel_id
+            channel.guild = guild
+            channel.mention = f"<#{channel_id}>"
+            channel.send = AsyncMock()
+            channel.permissions_for.side_effect = lambda member: nextcord.Permissions(
+                view_channel=member is not guild.default_role, send_messages=True,
+                embed_links=True, attach_files=True)
+            channels.append(channel)
+        interaction.data["options"] = [
+            {"name": name, "type": 7, "value": str(channel.id)}
+            for name, channel in zip(("channel", "log_channel"), channels)
+        ]
+        with patch.object(self.bot._connection, "get_channel", side_effect={c.id: c for c in channels}.get):
+            await self.apps["confess"].call(self.bot._connection, interaction)
+        await asyncio.wait_for(interaction.received.wait(), timeout=3)
+        self.assertIn("Painel", interaction.sent[0]["content"])
+        self.assertEqual(self.db.confession_channels(guild.id), (500, 600))
+        interaction.response.defer.assert_awaited_once()
+        ctx = await self.prefix_context("r.confess <#500> <#600>", author=interaction.user)
+        ctx.guild = guild
+        with patch.object(commands.TextChannelConverter, "convert", AsyncMock(side_effect=channels)):
+            await ctx.command.invoke(ctx)
+        self.assertEqual(channels[0].send.await_count, 2)
+        self.assertTrue(channels[0].send.call_args.kwargs["view"].is_persistent())
+
+    async def test_confess_checks_admin_and_guild_in_both_formats(self):
+        for guild in (True, False):
+            interaction = self.interaction("confess", guild=guild)
+            # Resolved options still pass through the shared runtime checks.
+            await self.bot.get_cog("SlashCommands").invoke(
+                interaction, "confess", channel=Mock(), log_channel=Mock())
+            await asyncio.wait_for(interaction.received.wait(), timeout=3)
+            self.assertIn("administrador" if guild else "servidor", interaction.sent[0]["content"])
+            ctx = await self.prefix_context("r.confess <#500> <#600>", guild=guild)
+            with self.assertRaises(commands.MissingPermissions if guild else commands.NoPrivateMessage):
+                await ctx.command.invoke(ctx)
+
+    async def test_quiz_setup_with_discord_options_and_prefix_panel_and_disable(self):
+        interaction = self.interaction("quiz", author=user(admin=True))
+        guild = interaction.guild
+        guild.default_role, guild.me = object(), object()
+        channels = []
+        for channel_id in (500, 600):
+            channel = Mock(spec=nextcord.TextChannel)
+            channel.id, channel.guild, channel.mention = channel_id, guild, f"<#{channel_id}>"
+            channel.permissions_for.side_effect = lambda member: nextcord.Permissions(
+                view_channel=member is not guild.default_role, send_messages=True, embed_links=True)
+            channels.append(channel)
+        interaction.data["options"] = [
+            {"name": name, "type": 7, "value": str(channel.id)}
+            for name, channel in zip(("channel", "review_channel"), channels)
+        ] + [{"name": "reward", "type": 4, "value": 2500}]
+        with patch.object(self.bot._connection, "get_channel", side_effect={c.id: c for c in channels}.get):
+            await self.apps["quiz"].call(self.bot._connection, interaction)
+        await asyncio.wait_for(interaction.received.wait(), timeout=3)
+        self.assertEqual(self.db.quiz_config(guild.id)["reward"], 2500)
+        self.assertTrue(interaction.sent[0]["view"].is_persistent())
+        ctx = await self.prefix_context("r.quiz <#500> <#600>", author=interaction.user)
+        ctx.guild = guild
+        with patch.object(commands.TextChannelConverter, "convert", AsyncMock(side_effect=channels)):
+            await ctx.command.invoke(ctx)
+        self.assertEqual(self.db.quiz_config(guild.id)["reward"], 1000)
+        panel = await self.slash("quizpanel", author=interaction.user)
+        self.assertTrue(panel.sent[0]["view"].is_persistent())
+        ctx = await self.prefix_context("r.quizoff", author=interaction.user)
+        await ctx.command.invoke(ctx)
+        self.assertFalse(self.db.quiz_config(guild.id)["enabled"])
+        panel = await self.slash("quizpanel", author=interaction.user)
+        self.assertIn("Configure primeiro", panel.sent[0]["content"])
+
+    async def test_quiz_commands_check_admin_and_guild_at_runtime(self):
+        for name in ("quiz", "quizpanel", "quizoff"):
+            for guild in (True, False):
+                interaction = self.interaction(name, guild=guild)
+                options = {"channel": Mock(), "review_channel": Mock()} if name == "quiz" else {}
+                await self.bot.get_cog("SlashCommands").invoke(interaction, name, **options)
+                await asyncio.wait_for(interaction.received.wait(), timeout=3)
+                self.assertIn("administrador" if guild else "servidor", interaction.sent[0]["content"])
+                ctx = await self.prefix_context("r." + name, guild=guild)
+                with self.assertRaises(commands.MissingPermissions if guild else commands.NoPrivateMessage):
+                    await ctx.command.invoke(ctx)
+
+    async def test_close_ticket_prefix_aliases_and_slash(self):
+        self.db.configure_tickets(321, 50)
+        channel = Mock(spec=nextcord.TextChannel)
+        channel.id = 123
+        channel.category_id = 50
+        channel.topic = f"ticket-owner:{self.author.id}"
+        channel.delete = AsyncMock()
+        channel.permissions_for.return_value = nextcord.Permissions.none()
+        for name in ("close", "fechar", "closeticket"):
+            ctx = await self.prefix_context(f"r.{name}")
+            ctx.channel = channel
+            await ctx.command.invoke(ctx)
+        interaction = self.interaction("close")
+        interaction.channel = channel
+        await self.apps["close"].call(self.bot._connection, interaction)
+        self.assertEqual(channel.delete.await_count, 4)
+        self.assertIn("excluindo", interaction.sent[0]["content"])
+        interaction.response.defer.assert_awaited_once()
+
+    async def test_close_ticket_rejects_direct_messages_in_both_formats(self):
+        result = await self.slash("close", guild=False)
+        self.assertIn("servidor", result.sent[0]["content"])
+        ctx = await self.prefix_context("r.close", guild=False)
+        with self.assertRaises(commands.NoPrivateMessage):
+            await ctx.command.invoke(ctx)
+
+    async def accept_payment(self, view):
+        self.views.append(view)
+        for participant in (self.author, self.member):
+            interaction = SimpleNamespace(
+                user=participant, message=view.message,
+                response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            await view.confirm.callback(interaction)
+
     async def test_admin_commands_and_transfers_resolve_member_and_exact_amount(self):
         self.author.guild_permissions.administrator = True
         amount = 8_999_999_999_999_999
@@ -402,7 +573,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         await self.slash("resetbalance", member=self.member)
         self.assertEqual(self.db.balance(self.member.id), 0)
         await self.slash("addbalance", member=self.member, amount="300")
-        await self.slash("pay", member=self.member, amount="100")
+        result = await self.slash("pay", member=self.member, amount="100")
+        self.assertEqual(self.db.balance(self.member.id), 300)
+        await self.accept_payment(result.sent[0]["view"])
         self.assertEqual(self.db.balance(self.member.id), 400)
         self.assertEqual(self.db.balance(self.author.id), 9900)
 
@@ -462,11 +635,17 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
                     ctx = await self.prefix_context(f"r.{name} <@{self.member.id}> {raw}")
                     with patch.object(commands.MemberConverter, "convert", new=AsyncMock(return_value=self.member)):
                         await ctx.command.invoke(ctx)
+                    self.assertEqual(self.db.balance(self.author.id), amount * 2)
+                    self.assertEqual(self.db.balance(self.member.id), 0)
+                    view = ctx.send.call_args.kwargs["view"]
+                    await self.accept_payment(view)
                     self.assertEqual(self.db.balance(self.author.id), amount)
                     self.assertEqual(self.db.balance(self.member.id), amount)
-                    self.assertIn(f"transferiu {amount:,} D$", ctx.send.call_args.args[0])
+                    self.assertIn(f"transferiu {amount:,} D$", view.content())
                     result = await self.slash("pay", member=self.member, amount=raw)
-                    self.assertIn(f"transferiu {amount:,} D$", result.sent[0]["content"])
+                    self.assertEqual(self.db.balance(self.author.id), amount)
+                    await self.accept_payment(result.sent[0]["view"])
+                    self.assertIn(f"transferiu {amount:,} D$", result.sent[0]["view"].content())
                     self.assertEqual(self.db.balance(self.author.id), 0)
                     self.assertEqual(self.db.balance(self.member.id), amount * 2)
 
@@ -510,7 +689,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
                 with patch.object(self.bot.get_cog("Games"), "start_game", side_effect=start):
                     await self.slash(name, amount=raw)
                 self.assertEqual(received, [expected])
-        with patch("games.RNG.choice", return_value="💎"):
+        with patch("cogs.games.RNG.choice", return_value="💎"):
             await self.slash("slots", amount="ALL")
         self.assertEqual(self.db.balance(self.author.id), 100_000)
 
@@ -533,7 +712,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_blackjack_button_settlement_edits_slash_message(self):
         # Deal player 19, dealer 18, avoiding an immediate natural.
         cards = list(reversed([("10", "♠"), ("10", "♥"), ("9", "♠"), ("8", "♥")]))
-        with patch("games.Blackjack", side_effect=lambda amount: Blackjack(amount, cards)):
+        with patch("cogs.games.Blackjack", side_effect=lambda amount: Blackjack(amount, cards)):
             result = await self.slash("blackjack", amount="100")
         view = result.sent[0]["view"]
         click = SimpleNamespace(user=self.author, message=view.message,

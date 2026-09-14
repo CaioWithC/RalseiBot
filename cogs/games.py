@@ -5,9 +5,9 @@ import nextcord
 from nextcord.ext import commands
 
 from db import database, EconomyError
-from amounts import BetAmount
-from command_support import DualCommand
-from game_rules import (Blackjack, Mines, RNG, SLOT_SYMBOLS, SLOT_TRIPLES,
+from cogs.amounts import BetAmount
+from cogs.command_support import DualCommand
+from cogs.game_rules import (Blackjack, Mines, RNG, SLOT_SYMBOLS, SLOT_TRIPLES,
                         format_hand, hand_value, slot_multiplier, mines_multiplier)
 
 log = logging.getLogger(__name__)

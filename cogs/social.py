@@ -10,8 +10,8 @@ from nextcord.ext import commands
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
 from db import database, EconomyError
-from leaderboard import font
-from command_support import DualCommand, DualGroup
+from cogs.leaderboard import font
+from cogs.command_support import DualCommand, DualGroup
 
 WIDTH, HEIGHT = 1000, 790
 HEADER_HEIGHT, BACKGROUND_HEIGHT = 190, 400
@@ -147,8 +147,8 @@ def render_profile(profile, name, avatar=None, marriage=None):
     draw_fitted(draw, (balance_x, 138), f"{profile['balance']:,}", 26,
                 180 if marriage else 257, foreground, True)
     if marriage:
-        draw.text((710, 103), "Casado com", font=font(16), fill=foreground)
-        draw_fitted(draw, (710, 130), marriage["spouse_name"], 26, 258, foreground)
+        draw.text((710, 103), "CASADO COM", font=font(16), fill=foreground)
+        draw_fitted(draw, (710, 123), marriage["spouse_name"], 26, 258, foreground)
         draw_fitted(draw, (710, 158), marriage_duration(marriage["married_at"]),
                     13, 258, foreground)
 

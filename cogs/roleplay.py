@@ -1,5 +1,4 @@
-"""Roleplay embeds with one ordered GIF rotation per action."""
-from itertools import cycle
+"""Roleplay embeds with random GIF draws without replacement per action."""
 import asyncio
 import logging
 import random
@@ -7,7 +6,7 @@ import random
 import nextcord
 from nextcord.ext import commands
 
-from command_support import DualCommand, InteractionContext
+from cogs.command_support import DualCommand, InteractionContext
 from db import database, EconomyError
 
 # Direct GIF URLs from the supplied albums, in album order.
@@ -76,7 +75,19 @@ class Roleplay(commands.Cog):
     def __init__(self, bot, storage=None):
         self.bot = bot
         self.storage = storage or database
-        self.gifs = {action: random.choice(urls) for action, urls in GIFS.items()}
+        self.gifs = {action: [] for action in GIFS}
+        self.last_gif = {}
+
+    def next_gif(self, action):
+        remaining = self.gifs[action]
+        if not remaining:
+            remaining.extend(GIFS[action])
+        # Exclude the previous GIF even when starting a new round.
+        choices = [url for url in remaining if url != self.last_gif.get(action)]
+        selected = random.choice(choices or remaining)
+        remaining.remove(selected)
+        self.last_gif[action] = selected
+        return selected
 
     async def interact(self, ctx, member, action):
         if member.id == ctx.author.id:
@@ -87,7 +98,7 @@ class Roleplay(commands.Cog):
             color=0xcf59ff,
         )
         view = ReciprocateView(self, ctx.author, member, action)
-        embed.set_image(url=self.gifs[action])
+        embed.set_image(url=self.next_gif(action))
         points = self.storage.add_marriage_affinity(ctx.author.id, member.id, random.randint(1, 3))
         if points:
             unit = "ponto" if points == 1 else "pontos"

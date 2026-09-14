@@ -25,15 +25,21 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.ping` | `/ping` | Verifica se o bot está online |
 | `r.balance` | `/balance` | Saldo; aliases: `saldo`, `atm`, `bal` |
 | `r.daily` | `/daily` | Recompensa de 5.000–100.000 moedas uma vez por dia; renova às 00:00 GMT-3, persistente |
+| `r.missions [claim]` | `/missions [action:view/claim]` | Veja as missões diárias ou resgate todos os bônus concluídos; aliases: `mission`, `missoes`, `missões` |
 | `r.work` | `/work` | Ganha 10.000–40.000 moedas; intervalo de 2h; somente em servidores |
 | `r.freelance` | `/freelance` | Ganha 100–10.000 moedas; intervalo de 10min; aliases: `freelancer`, `freelas`, `frelas` |
 | `r.rob @membro` | `/rob member:@membro` | Tenta roubar DarkMoney de outro membro; intervalo de 1h |
-| `r.pay @membro 100` | `/pay member:@membro amount:100` | Transfere moedas no servidor; aceita `K` (mil) e `M` (milhão), como `1.5k` ou `2M`, sem diferenciar maiúsculas; aliases: `transferir`, `pix`, `pagar` |
+| `r.pay @membro 100` | `/pay member:@membro amount:100` | Transfere moedas após as duas pessoas clicarem em Aceitar; qualquer uma pode cancelar e o pedido expira após 2 minutos sem interação; aceita `K` (mil) e `M` (milhão), como `1.5k` ou `2M`; aliases: `transferir`, `pix`, `pagar` |
 | `r.addbalance @membro 100` | `/addbalance member:@membro amount:100` | Adiciona moedas; somente administradores |
 | `r.setbalance @membro 100` | `/setbalance member:@membro amount:100` | Define o saldo disponível; somente administradores |
 | `r.resetbalance @membro` | `/resetbalance member:@membro` | Zera o saldo disponível; somente administradores |
 | `r.activity Seu texto aqui` | `/activity text:Seu texto aqui` | Atividade personalizada por 5 minutos; somente administradores; aliases: `atividade`, `status`. Use `reset` para retomar a rotação |
 | `r.ticket Categoria` | `/ticket category:Categoria` | Publica um painel que cria tickets privados numerados; somente administradores |
+| `r.quiz #chat #revisao [premio]` | `/quiz channel:#chat review_channel:#revisao [reward]` | Ativa o quiz automático e publica o painel de sugestões; somente administradores |
+| `r.quizpanel` | `/quizpanel` | Publica outro painel de sugestões; somente administradores |
+| `r.quizoff` | `/quizoff` | Desativa o quiz e cancela a rodada atual; somente administradores |
+| `r.confess #confissões #logs-privados` | `/confess channel:#confissões log_channel:#logs-privados` | Configura e publica um painel de confissões anônimas com imagem opcional e registro do autor para a equipe; somente administradores |
+| `r.close` | `/close` | Fecha o ticket atual e exclui seu canal; somente o dono ou quem tem Gerenciar Canais; aliases: `fechar`, `closeticket` |
 | `r.rich [página]` | `/rich [page]` | PNG com 10 jogadores, posições, nomes e saldos; aliases: `richlist`, `leaderboard`, `top`, `rank` |
 | `r.profile [@usuário]` | `/profile view [member]` | Perfil em imagem com avatar, nome, ID, ranking, saldo, fundo e Sobre mim; alias: `perfil` |
 | `r.profile color #77E5BC` | `/profile color value:#77E5BC` | Cor dos painéis do seu perfil em hexadecimal; alias: `cor` |
@@ -48,16 +54,101 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.slots 100` | `/slots amount:100` | Caça-níqueis; aliases: `slot`, `slotmachine` |
 | `r.blackjack 100` | `/blackjack amount:100` | Blackjack com botões; aliases: `bj`, `21` |
 | `r.mines 100 [bombas]` | `/mines amount:100 [mine_count]` | Escolha 1–15 bombas no menu ou informe a quantidade. Tabuleiro 4×4; alias: `minas` |
+| `r.six iniciar` ou `r.uno` | `/six iniciar` | Uno em tópicos públicos, com 2–20 pessoas, mãos privadas, regras configuráveis e apostas opcionais |
 
 Nos comandos slash, preencha os campos que o Discord oferece; os itens entre colchetes são opcionais. O Discord exige um subcomando em grupos, então visualizar o perfil usa `/profile view`. Todos os aliases da tabela continuam disponíveis com `r.`. Os dois formatos executam os mesmos comandos, com as mesmas permissões, conversores, saldos e cooldowns; alternar entre prefixo e slash não permite repetir uma recompensa ou evitar o intervalo. Os comandos de administração alteram apenas o saldo disponível; apostas já iniciadas continuam com sua liquidação normal.
 
 O ranking é global entre todos os usuários registrados e mostra o saldo disponível, sem apostas em andamento. Empates são ordenados pelo ID do usuário. Nomes vêm do cache do Discord, com ID como alternativa. A imagem é desenhada localmente com Pillow, sem serviços de geração ou downloads de avatares.
 
+## Uno / Six
+
+Use **`/six iniciar`**, **`r.six iniciar`** ou **`r.uno`** em um canal de texto. O painel lista as mesas desse canal; **Criar nova mesa** publica um convite e abre um **tópico público**. Todos que têm acesso ao canal podem acompanhar o tópico e entrar no lobby. O painel slash é privado; o painel por prefixo é público e seus controles pertencem a quem executou o comando. Convites e controles da mesa são compartilhados.
+
+O lobby aceita **2–20 jogadores**. O anfitrião escolhe as regras, **1, 2 ou 3 vencedores** (sempre menos que a quantidade de jogadores) e a aposta: casual, **100, 1.000 ou 10.000 D$ por pessoa**. As opções começam em modo casual, um vencedor e desafio do +4 ativo. **Entrar** aceita as configurações exibidas. Se o anfitrião mudar regras, quantidade de vencedores ou aposta, os demais precisam clicar em **Entrar** novamente; nenhum dinheiro é debitado até **Começar**. Todos os débitos são realizados juntos, e saldo insuficiente de uma pessoa impede o início sem cobrar as outras.
+
+O anfitrião também escolhe **Normal, Meme ou Overwatch** no seletor **Baralho da mesa**. Cada tema usa imagens próprias na mesa pública, nas mãos privadas e na confirmação da jogada. Essa escolha visual não exige novo aceite dos participantes e fica fixa quando a partida começa.
+
+Somente o anfitrião começa a partida. **Sair** funciona no lobby; se o anfitrião sair, o próximo participante assume. O anfitrião pode cancelar o lobby. A equipe com **Gerenciar Mensagens**, **Gerenciar Tópicos** ou Administrador pode encerrar mesas pelo seletor do painel. Lobbies expiram após 15 minutos. Cada pessoa participa de uma mesa por vez; após começar, também fica impedida de apostar nos outros jogos até a partida acabar.
+
+Cada jogador recebe **7 cartas**. A mesa pública mostra a carta do topo, a cor atual, a direção, a vez e a quantidade de cartas de cada pessoa. **Ver minha mão** envia uma imagem e menus que só o próprio jogador pode ver. Escolha a carta, revise a seleção e clique em **Jogar**; **Voltar** permite corrigir. Coringas abrem quatro botões de cor, e o 7 abre a escolha de outro jogador quando a regra de troca está ativa. Mãos grandes são divididas em páginas de até 25 cartas. Depois de mudanças na partida, uma seleção antiga é recusada e deve ser reaberta.
+
+- **Regras básicas:** mesma cor, número ou símbolo; bloquear pula uma pessoa e inverter muda a direção (com dois jogadores, joga novamente). Compre uma carta; se ela servir, jogue a carta recém-comprada ou passe. Se não servir, a vez passa automaticamente. Cada vez dura **60 segundos**; ao esgotar, compra 1 e passa, ou aceita a dívida inteira de +2/+4. Comprar não reinicia o prazo da vez.
+- **Gritar Uno:** ao ficar com uma carta, o botão fica disponível durante **3 segundos**. Também é possível declarar Uno na confirmação, antes de jogar. Depois do prazo, outro jogador pode apertar **Pegar!** e aplicar +2, antes da próxima ação. Uma ação rápida não reduz os três segundos de declaração. Trocas de mãos exigem nova declaração de quem receber uma carta.
+- **Desafiar +4:** é possível blefar mesmo tendo a cor atual. Se o desafio acertar, o autor compra 4 e quem desafiou mantém a vez. Se errar, quem desafiou compra a dívida +2 e perde a vez. Com o desafio desligado, o bot recusa +4 se houver carta da cor atual. Um +4 final aguarda a aceitação ou o desafio antes de definir a vitória.
+- **Empilhar +2/+4:** qualquer +2 ou +4 pode responder a uma dívida, aumentando a compra para o próximo. Desafiar um +4 empilhado trata somente o último +4; se o blefe for confirmado, a dívida anterior continua pendente.
+- **Jogar cartas repetidas:** permite jogar juntas cartas numéricas de mesmo valor; pelo menos uma precisa combinar com a mesa. Cartas de ação são jogadas individualmente. A confirmação mostra a ordem em que as cartas serão descartadas.
+- **Comprar até jogar:** compra até encontrar uma carta utilizável; depois permite jogá-la ou passar. Se todas as cartas disponíveis estiverem nas mãos, a compra termina sem travar o jogo.
+- **7–0:** o 7 troca sua mão com a de outra pessoa; o 0 gira todas as mãos na direção da rodada. A troca acontece antes de conferir a vitória: se a mão vazia for transferida, quem a receber termina. Vários 7 ou 0 juntos aplicam a troca uma vez.
+
+O baralho tem 108 cartas, usando dois exemplares nas mesas com 16–20 jogadores para comportar as mãos iniciais. A abertura usa uma carta numérica. Quando o monte acaba, o descarte é embaralhado novamente, preservando o topo. A partida termina ao atingir a quantidade de vencedores escolhida. O pote é dividido integralmente entre eles, com as sobras entregues na ordem de chegada. A recompensa do diagrama foi integrada ao **DarkMoney**: **+30 D$ para o primeiro colocado e +5 D$ para cada participante que jogou até o fim**, incluindo o campeão.
+
+As tabelas `uno_games` e `uno_players` guardam reservas e resultados no SQLite; pagamentos e reembolsos são feitos uma única vez, inclusive com cliques simultâneos. O estado das cartas e os botões ficam em memória. **Reiniciar ou recarregar o bot encerra as mesas; apostas pendentes são devolvidas e não há recompensa por partidas interrompidas.** Abra uma nova mesa depois do reinício. Remover o tópico ou encerrar pela equipe também cancela e devolve as apostas. Execute uma única instância por banco.
+
+O baralho ilustrado ainda pode ser concluído separadamente: o jogo usa **cartas provisórias desenhadas localmente**, com cores, ações e visuais diferentes para cada tema. Coloque os PNGs finais em **`assets/uno/normal/`**, **`assets/uno/meme/`** e **`assets/uno/overwatch/`**, seguindo [os nomes das imagens](assets/uno/README.md). Cada arte disponível substitui sua carta provisória automaticamente; arquivos ausentes ou inválidos continuam usando a alternativa local do tema escolhido.
+
+O bot precisa de **Ver Canal, Enviar Mensagens, Inserir Links, Anexar Arquivos, Ler Histórico de Mensagens, Criar Tópicos Públicos e Enviar Mensagens em Tópicos**. Os tópicos herdam a visibilidade do canal. Referências: [tópicos públicos no Nextcord](https://docs.nextcord.dev/en/stable/api.html#nextcord.Message.create_thread) e [respostas privadas de interações](https://docs.nextcord.dev/en/stable/interactions.html).
+
+Os testes `test_uno_*.py` verificam regras e partidas completas simuladas, mãos privadas, botões, concorrência, apostas, cancelamento, recuperação e renderização sem conexão ao Discord.
+
+## Quiz automático
+
+Um administrador ativa o quiz e publica o painel de sugestões no canal em que executar:
+
+```text
+r.quiz #chat-geral #revisao-quiz 1000
+/quiz channel:#chat-geral review_channel:#revisao-quiz reward:1000
+```
+
+O prêmio é opcional: **1.000 D$** por padrão, configurável entre 1 e 100.000 D$. Há um canal de quiz por servidor. O canal de revisão precisa ser diferente, com **Ver Canal negado para @everyone**; libere somente a equipe, pois as respostas aparecem ali. O bot precisa de **Ver Canal, Enviar Mensagens e Inserir Links** nos dois canais e no canal do painel.
+
+A primeira pergunta pode aparecer após **30–60 minutos** da ativação. Cada publicação sorteia outro intervalo de 30–60 minutos. Quando o horário chega, o bot só publica se houver **pelo menos 5 mensagens de 2 pessoas nos últimos 10 minutos** no canal configurado. Mensagens de bots, webhooks, mensagens vazias e comandos `r.` não contam. Se o chat estiver parado, aguarda movimento; não acumula perguntas atrasadas. A verificação ocorre a cada 15 segundos.
+
+Cada rodada dura **2 minutos**. Responda diretamente no chat: a primeira resposta correta processada ganha o prêmio no saldo global. Maiúsculas, acentos, espaços extras e pontuação simples nas extremidades são ignorados; é preciso responder apenas com a resposta ou uma das escritas aceitas, sem frases extras. Edições não contam. Sem acertos, o bot revela a resposta e não paga ninguém. O banco registra o vencedor e o crédito na mesma transação para impedir pagamentos duplicados, inclusive após reiniciar.
+
+O bot já inclui 10 perguntas de matemática e português. O botão **Sugerir pergunta** abre um modal com pergunta, resposta correta e até 9 outras escritas aceitas, uma por linha. A sugestão vai para o canal de revisão com a identificação do autor. Quem tem **Gerenciar Mensagens** no servidor ou é administrador pode **Aprovar** ou **Recusar**. Somente sugestões aprovadas entram no sorteio daquele servidor. Cada pessoa pode manter até 3 sugestões pendentes e enviar uma por minuto.
+
+Use **`r.quizpanel` ou `/quizpanel`** para publicar outro painel no canal atual. **`r.quizoff` ou `/quizoff`** desativa o quiz e cancela a rodada atual. Esses comandos são exclusivos de administradores. Executar `quiz` novamente reconfigura o canal/prêmio, cancela a rodada atual e reinicia o intervalo, preservando as perguntas aprovadas.
+
+Configurações, sugestões, decisões, prêmios e rodadas ficam nas tabelas `quiz_configs`, `quiz_suggestions` e `quiz_rounds`, criadas automaticamente. Painéis e botões de revisão continuam funcionando após reiniciar. Uma rodada publicada mantém seu prazo original; o histórico de atividade começa vazio após reiniciar. Formulários abertos precisam ser reabertos após reiniciar e expiram em 10 minutos. Uma publicação interrompida antes de registrar o ID da mensagem é cancelada na inicialização; falhas de envio aguardam o próximo intervalo. Execute uma instância do bot por banco, como nos outros jogos.
+
+## Confissões anônimas
+
+Um administrador configura os canais e publica o painel com:
+
+```text
+r.confess #confissões #logs-privados
+/confess channel:#confissões log_channel:#logs-privados
+```
+
+O canal de logs precisa ser diferente do canal de confissões, com **Ver Canal negado para @everyone**. Libere o acesso somente aos cargos ou membros da equipe; o administrador deve conferir essas permissões. O bot precisa de **Ver Canal, Enviar Mensagens, Inserir Links e Anexar Arquivos** nos dois canais. Nenhuma permissão de canal é alterada pelo comando.
+
+Qualquer membro com acesso ao canal pode clicar em **Enviar confissão**, tanto no painel inicial quanto em cada confissão publicada. O formulário aceita texto obrigatório de até **4.000 caracteres** e o upload de **uma imagem opcional** (PNG, JPG, GIF ou WebP, até **8 MB**, respeitando também o limite do servidor, e 16 milhões de pixels). GIFs mantêm a animação. A imagem é reenviada como anexo do bot com nome de arquivo neutro. A confirmação do envio aparece somente para quem enviou.
+
+As confissões aparecem em embeds roxos numerados, sem usuário, avatar ou ID do autor. O painel e o formulário avisam que **a identidade é visível para a equipe**. O canal privado recebe o texto, a imagem, o usuário, o ID e o horário; após a publicação, o registro recebe o link da confissão. Menções não geram notificações. A confissão só é publicada se o registro privado for enviado com sucesso. Se a publicação falhar, o registro permanece e informa a falha quando possível.
+
+A configuração, a numeração por servidor e os IDs de atribuição ficam salvos no SQLite, nas tabelas `confession_configs` e `confessions`. Reiniciar ou reconfigurar não zera a numeração; tentativas interrompidas podem deixar números sem publicação. Os botões continuam funcionando depois de reiniciar. Ao mudar o canal, os painéis antigos ficam desativados; formulários já abertos precisam ser reabertos se a configuração mudar. Formulários expiram após 10 minutos sem interação e precisam ser reabertos após reiniciar o bot.
+
+`cogs/confessions.py` usa o componente de upload documentado pelo Discord por meio de uma subclasse de `nextcord.ui.Modal`, pois Nextcord 3.2 não fornece esse componente em `nextcord.ui`. A implementação preserva o envio e o despacho de interações da biblioteca. Referência: [File Upload em modais](https://docs.discord.com/developers/components/reference#file-upload).
+
+## Missões diárias
+
+Use `r.missions` ou `/missions` para acompanhar três tarefas diárias:
+
+| Tarefa | Meta | Bônus |
+| --- | --- | --- |
+| Boas-vindas ao reino | Receber `daily` uma vez | 2.500 D$ |
+| Um dia de trabalho | Concluir `work` uma vez | 5.000 D$ |
+| Talento independente | Concluir `freelance` três vezes | 7.500 D$ |
+
+`r.missions claim` ou `/missions action:claim` resgata todos os bônus disponíveis de uma vez, além do pagamento normal dos comandos. Cada missão paga uma única vez por dia. O progresso é global por usuário, começa a contar após a instalação desta versão e fica salvo mesmo ao reiniciar o bot. As missões renovam às **00:00 GMT-3**; bônus não resgatados expiram nesse horário. Não é necessário abrir a lista para começar a progredir.
+
+Somente pagamentos bem-sucedidos de `daily`, `work` e `freelance` contam; comandos recusados e créditos de administradores não contam. Os cooldowns existentes continuam valendo. A tabela `mission_progress` é criada automaticamente no banco. Metas, títulos e bônus ficam em `cogs/mission_rules.py`.
+
 ## Roleplay
 
 O botão **Retribuir** permite que quem recebeu o beijo, abraço ou carinho responda ao autor com a mesma ação e o próximo GIF. Cada botão pode ser usado uma vez e expira após 2 minutos sem interação. A resposta traz um novo botão para o outro participante e respeita os mesmos cooldowns dos comandos.
 
-`kiss`, `hug` e `pat` enviam embeds com os participantes mencionados, uma frase em português e um GIF grande. Cada comando percorre seus seis GIFs na ordem dos álbuns [kiss](https://imgur.com/a/E5nJtdx), [hug](https://imgur.com/a/gYHRVCv) e [pat](https://imgur.com/a/PLnbgn2), voltando ao primeiro depois do sexto. A rotação é compartilhada entre servidores e entre prefixo/slash, separada por ação, e recomeça ao reiniciar o bot. Os links diretos ficam em `roleplay.py`; alterações futuras nos álbuns precisam ser atualizadas ali.
+`kiss`, `hug` e `pat` enviam embeds com os participantes mencionados, uma frase em português e um GIF grande. Cada comando sorteia um dos seus seis GIFs dos álbuns [kiss](https://imgur.com/a/E5nJtdx), [hug](https://imgur.com/a/gYHRVCv) e [pat](https://imgur.com/a/PLnbgn2) a cada uso, passando por todos antes de repetir. O último GIF de uma rodada nunca é o primeiro da próxima. A seleção é compartilhada entre servidores, prefixo/slash e o botão Retribuir, separada por ação, e recomeça ao reiniciar o bot. Os links diretos ficam em `cogs/roleplay.py`; alterações futuras nos álbuns precisam ser atualizadas ali.
 
 Use em um servidor e escolha outro membro. Cada ação tem cooldown de 5 segundos por usuário, compartilhado entre prefixo e slash. Quando os dois participantes são casados entre si, a interação acrescenta de 1 a 3 pontos de afinidade e mostra o valor no rodapé. O total aparece em `r.marriage` e `/marriage` e persiste após reiniciar. A tabela `marriage_affinity` é criada automaticamente, preservando os casamentos existentes.
 
@@ -92,13 +183,13 @@ r.activity reset
 /activity text:reset
 ```
 
-Uma mensagem definida manualmente tem prioridade sobre as reações até expirar ou receber `reset`. A atividade do bot é **global, igual em todos os servidores**, e os textos temporários são descartados ao reiniciar. As frases e os intervalos podem ser editados em `activities.py`, nas listas `ACTIVITIES` e `ADMIN_REACTIONS` e nas constantes de tempo.
+Uma mensagem definida manualmente tem prioridade sobre as reações até expirar ou receber `reset`. A atividade do bot é **global, igual em todos os servidores**, e os textos temporários são descartados ao reiniciar. As frases e os intervalos podem ser editados em `cogs/activities.py`, nas listas `ACTIVITIES` e `ADMIN_REACTIONS` e nas constantes de tempo.
 
 O bot publica no máximo uma alteração a cada 10 segundos; em uma sequência rápida de comandos, prevalece a reação mais recente. Isso mantém as alterações abaixo do limite documentado de cinco atualizações em 20 segundos. Emojis são incluídos no próprio texto da atividade. [Referência de atividades e limites do Discord](https://docs.discord.com/developers/events/gateway-events#activity-object).
 
 ## Perfil social
 
-`social.py` gera um cartão de 1000×790: avatar circular e identidade no cabeçalho, posição no `r.rich` e saldo à direita, imagem personalizada no centro e Sobre mim no rodapé. A cor escolhida preenche o cabeçalho e o rodapé; a cor do texto muda automaticamente para manter a leitura. A posição e o saldo são consultados a cada visualização.
+`cogs/social.py` gera um cartão de 1000×790: avatar circular e identidade no cabeçalho, posição no `r.rich` e saldo à direita, imagem personalizada no centro e Sobre mim no rodapé. A cor escolhida preenche o cabeçalho e o rodapé; a cor do texto muda automaticamente para manter a leitura. A posição e o saldo são consultados a cada visualização.
 
 Para definir o fundo, anexe **uma imagem à mesma mensagem** que contém `r.profile background`, ou envie o arquivo na opção **image** de `/profile background`. São aceitos PNG, JPG, WebP e GIF, até 8 MB e 16 milhões de pixels. A imagem é recortada pelo centro para 1000×400; GIFs usam o primeiro quadro. O fundo é salvo no SQLite e continua disponível após reiniciar o bot. Use `r.profile background reset` ou `/profile background action:reset` para remover o fundo, e `r.profile about reset` ou `/profile about text:reset` para limpar a bio. Cada usuário altera apenas seu próprio perfil.
 

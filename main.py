@@ -10,7 +10,7 @@ from nextcord.ext import commands
 load_dotenv()
 
 from db import EconomyError, database
-from command_support import DualCommand, slash_name
+from cogs.command_support import DualCommand, slash_name
 
 log = logging.getLogger(__name__)
 
@@ -42,8 +42,8 @@ def create_bot():
     intents.message_content = True
     bot = commands.Bot(command_prefix="r.", intents=intents, help_command=None,
                        allowed_mentions=nextcord.AllowedMentions.none())
-    for extension in ("economy", "leaderboard", "games", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets"):
-        bot.load_extension(extension)
+    for extension in ("economy", "leaderboard", "games", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno"):
+        bot.load_extension(f"cogs.{extension}")
 
     @bot.event
     async def on_ready():
@@ -60,6 +60,8 @@ def create_bot():
             name = command.strip().removeprefix("r.").removeprefix("/")
             if name == "profile view":
                 name = "profile"
+            if name in ("six iniciar", "uno iniciar"):
+                name = "six"
             target = bot.get_command(name)
             if target is None:
                 await ctx.send("Comando não encontrado. Use `r.help` ou `/help` para ver a lista.")
@@ -115,7 +117,7 @@ def create_bot():
             await interaction.response.send_message(message, ephemeral=True)
 
     # Nextcord registers global application commands automatically on connection.
-    bot.load_extension("slash_commands")
+    bot.load_extension("cogs.slash_commands")
     return bot
 
 

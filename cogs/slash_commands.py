@@ -2,8 +2,8 @@
 import nextcord
 from nextcord.ext import commands
 
-from command_support import InteractionContext
-from sendmessage import EmbedJSONModal
+from cogs.command_support import InteractionContext
+from cogs.sendmessage import EmbedJSONModal
 
 GUILD_ONLY = [nextcord.InteractionContextType.guild]
 ADMIN = nextcord.Permissions(administrator=True)
@@ -23,6 +23,17 @@ class SlashCommands(commands.Cog):
     @nextcord.slash_command(name="ping", description="Verifica se o bot está online.")
     async def ping(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "ping")
+
+    @nextcord.slash_command(name="six", description="Uno em mesas públicas, com mãos privadas e regras configuráveis.",
+                            contexts=GUILD_ONLY)
+    async def six(self, interaction: nextcord.Interaction):
+        pass
+
+    @six.subcommand(name="iniciar", description="Veja as mesas do canal ou crie uma mesa de Uno.")
+    async def six_iniciar(self, interaction: nextcord.Interaction):
+        ctx = InteractionContext(self.bot, interaction, self.bot.get_command("six"), {"action": "iniciar"})
+        await interaction.response.defer(ephemeral=True)
+        await self.bot.invoke(ctx)
 
     @nextcord.slash_command(name="help", description="Lista os comandos r. e /, ou mostra a ajuda de um comando.")
     async def help(self, interaction: nextcord.Interaction,
@@ -53,6 +64,42 @@ class SlashCommands(commands.Cog):
                          channel_types=[nextcord.ChannelType.category])):
         await self.invoke(interaction, "ticket", category=category)
 
+    @nextcord.slash_command(name="confess", description="Administrador: configura os canais e publica o painel de confissões.",
+                            contexts=GUILD_ONLY, default_member_permissions=ADMIN)
+    async def confess(self, interaction: nextcord.Interaction,
+                      channel: nextcord.TextChannel = nextcord.SlashOption(
+                          description="Canal onde as confissões serão publicadas.",
+                          channel_types=[nextcord.ChannelType.text]),
+                      log_channel: nextcord.TextChannel = nextcord.SlashOption(
+                          description="Canal privado da equipe para registrar os autores.",
+                          channel_types=[nextcord.ChannelType.text])):
+        await self.invoke(interaction, "confess", channel=channel, log_channel=log_channel)
+
+    @nextcord.slash_command(name="close", description="Fecha o ticket atual e exclui seu canal.", contexts=GUILD_ONLY)
+    async def close(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "close")
+
+    @nextcord.slash_command(name="quiz", description="Administrador: configura o quiz automático e publica o painel de sugestões.",
+                            contexts=GUILD_ONLY, default_member_permissions=ADMIN)
+    async def quiz(self, interaction: nextcord.Interaction,
+                   channel: nextcord.TextChannel = nextcord.SlashOption(
+                       description="Chat onde as perguntas aparecerão.", channel_types=[nextcord.ChannelType.text]),
+                   review_channel: nextcord.TextChannel = nextcord.SlashOption(
+                       description="Canal privado da equipe para aprovar sugestões.", channel_types=[nextcord.ChannelType.text]),
+                   reward: int = nextcord.SlashOption(description="Prêmio em D$ (padrão: 1.000).", min_value=1,
+                                                      max_value=100_000, default=1000, required=False)):
+        await self.invoke(interaction, "quiz", channel=channel, review_channel=review_channel, reward=reward)
+
+    @nextcord.slash_command(name="quizpanel", description="Administrador: publica o botão para sugerir perguntas do quiz.",
+                            contexts=GUILD_ONLY, default_member_permissions=ADMIN)
+    async def quizpanel(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "quizpanel")
+
+    @nextcord.slash_command(name="quizoff", description="Administrador: desativa o quiz automático.",
+                            contexts=GUILD_ONLY, default_member_permissions=ADMIN)
+    async def quizoff(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "quizoff")
+
     @nextcord.slash_command(name="kiss", description="Beije alguém com um GIF.", contexts=GUILD_ONLY)
     async def kiss(self, interaction: nextcord.Interaction,
                    member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá o beijo.")):
@@ -76,6 +123,12 @@ class SlashCommands(commands.Cog):
     async def daily(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "daily")
 
+    @nextcord.slash_command(name="missions", description="Veja suas missões diárias ou resgate os bônus de DarkMoney.")
+    async def missions(self, interaction: nextcord.Interaction,
+                       action: str = nextcord.SlashOption(description="Ver progresso ou resgatar todos os bônus disponíveis.",
+                                                          default="view", choices=["view", "claim"])):
+        await self.invoke(interaction, "missions", action=action)
+
     @nextcord.slash_command(name="work", description="Trabalhe para ganhar DarkMoney a cada 2 horas.", contexts=GUILD_ONLY)
     async def work(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "work")
@@ -89,7 +142,7 @@ class SlashCommands(commands.Cog):
     member: nextcord.Member = nextcord.SlashOption(description="Membro que será roubado.")):
         await self.invoke(interaction, "rob", member=member)
 
-    @nextcord.slash_command(name="pay", description="Transfira DarkMoney para outro membro.", contexts=GUILD_ONLY)
+    @nextcord.slash_command(name="pay", description="Transfira DarkMoney com aceite das duas pessoas por botão.", contexts=GUILD_ONLY)
     async def pay(self, interaction: nextcord.Interaction,
                   member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá as moedas."),
                   amount: str = nextcord.SlashOption(description="Quantidade de moedas. Ex.: 100, 10K ou 1.5M.")):
