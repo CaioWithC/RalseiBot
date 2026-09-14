@@ -16,6 +16,7 @@ from PIL import Image
 from db import Database
 from main import create_bot, error_message
 from cogs.game_rules import Blackjack
+from cogs.command_support import slash_name
 from cogs.social import MAX_UPLOAD_BYTES
 
 
@@ -44,7 +45,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.db.add_balance(self.author.id, 10_000)
         self.economy_patch = patch("cogs.economy.database", self.db)
         self.economy_patch.start()
-        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets", "Missions", "Confessions", "Quiz"):
+        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets", "Missions", "Confessions", "Quiz", "Uno"):
             self.bot.get_cog(name).storage = self.db
         self.apps = {command.name: command for command in self.bot.get_all_application_commands()}
         self.views = []
@@ -62,7 +63,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         received = asyncio.Event()
         response = SimpleNamespace(is_done=Mock(return_value=False))
 
-        async def defer():
+        async def defer(**kwargs):
             response.is_done.return_value = True
 
         interaction = SimpleNamespace(
@@ -154,10 +155,27 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
                 registered.update(f"{app.name} {child}" for child in app.children)
             else:
                 registered.add(app.name)
-        expected = {"profile view" if c.qualified_name == "profile" else c.qualified_name
-                    for c in self.bot.walk_commands()}
+        expected = {slash_name(c) for c in self.bot.walk_commands()}
         self.assertEqual(registered, expected)
         self.assertEqual(self.bot.command_prefix, "r.")
+
+    async def test_six_slash_is_private_and_uno_prefix_opens_the_same_panel(self):
+        channel = Mock(spec=nextcord.TextChannel)
+        channel.id = 123
+        interaction = self.interaction("six iniciar")
+        interaction.channel = channel
+        interaction.data["options"] = [{"name": "iniciar", "type": 1, "options": []}]
+        await self.apps["six"].call(self.bot._connection, interaction)
+        await asyncio.wait_for(interaction.received.wait(), timeout=3)
+        interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+        self.assertTrue(interaction.sent[-1]["ephemeral"])
+        self.assertIn("Uno", interaction.sent[-1]["embed"].title)
+        ctx = await self.prefix_context("r.uno iniciar")
+        ctx.message.channel = channel
+        await self.bot.invoke(ctx)
+        self.assertFalse(ctx.command_failed)
+        self.assertEqual(ctx.send.call_args.kwargs["embed"].title, interaction.sent[-1]["embed"].title)
+        self.views.append(ctx.send.call_args.kwargs["view"])
         for command in self.bot.walk_commands():
             for alias in command.aliases:
                 prefix = f"{command.parent.qualified_name} " if command.parent else ""

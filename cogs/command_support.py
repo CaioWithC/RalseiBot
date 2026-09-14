@@ -59,4 +59,4 @@ class DualGroup(_DualArguments, commands.Group):
 
 
 def slash_name(command):
-    return "profile view" if command.qualified_name == "profile" else command.qualified_name
+    return {"profile": "profile view", "six": "six iniciar"}.get(command.qualified_name, command.qualified_name)

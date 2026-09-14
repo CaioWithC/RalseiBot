@@ -69,6 +69,20 @@ class Bet(Base):
     payout = Column(CoinInteger, default=0)
 
 
+class UnoGame(Base):
+    __tablename__ = "uno_games"
+    id = Column(String, primary_key=True)
+    stake = Column(CoinInteger, nullable=False)
+    status = Column(String, nullable=False, default="active", index=True)
+    receipt = Column(String, nullable=False)
+
+
+class UnoPlayer(Base):
+    __tablename__ = "uno_players"
+    game_id = Column(String, primary_key=True)
+    discord_id = Column(String, primary_key=True, index=True)
+
+
 class DailyClaim(Base):
     __tablename__ = "daily_claims"
     discord_id = Column(String, primary_key=True)
@@ -342,7 +356,7 @@ class Database:
         with self.transaction() as session:
             active = session.scalar(select(Bet.id).where(
                 Bet.discord_id == str(discord_id), Bet.status == "active"))
-            if active:
+            if active or self._active_uno_player(session, [discord_id]):
                 raise EconomyError("Você já tem um jogo em andamento. Termine-o primeiro.")
             user = self.user(session, discord_id)
             # Resolve balance aliases in the same transaction as the debit.
@@ -392,6 +406,131 @@ class Database:
                 self.user(session, bet.discord_id).balance += bet.stake
                 bet.payout, bet.status = bet.stake, "refunded"
             return len(bets)
+
+    @staticmethod
+    def _uno_ids(player_ids, label):
+        if (not isinstance(player_ids, (list, tuple))
+                or any(type(player_id) is not int or player_id <= 0
+                       for player_id in player_ids)
+                or len(set(player_ids)) != len(player_ids)):
+            raise EconomyError(f"{label} devem ser usuários distintos e válidos.")
+        return list(player_ids)
+
+    @staticmethod
+    def _active_uno_player(session, player_ids):
+        return session.scalar(select(UnoPlayer.discord_id).join(
+            UnoGame, UnoPlayer.game_id == UnoGame.id).where(
+                UnoGame.status == "active",
+                UnoPlayer.discord_id.in_([str(player_id) for player_id in player_ids])))
+
+    @staticmethod
+    def _uno_receipt(game):
+        receipt = json.loads(game.receipt)
+        for field in ("payouts", "rewards", "refunds"):
+            receipt[field] = {int(player_id): value
+                              for player_id, value in receipt[field].items()}
+        return receipt
+
+    def start_uno_game(self, game_id, player_ids, stake):
+        """Reserve everyone's stake atomically, including a receipt for casual games.
+
+        The receipt persists money and membership, not the deck or turn state.
+        Recover unfinished tables with recover_uno_games before accepting commands.
+        """
+        if not isinstance(game_id, str) or not game_id.strip():
+            raise EconomyError("Identificador de mesa inválido.")
+        players = self._uno_ids(player_ids, "Os jogadores")
+        if not 2 <= len(players) <= 20:
+            raise EconomyError("A mesa precisa de 2 a 20 jogadores.")
+        if type(stake) is not int or stake < 0:
+            raise EconomyError("A aposta deve ser um inteiro a partir de 0 D$.")
+        with self.transaction() as session:
+            if session.get(UnoGame, game_id) is not None:
+                raise EconomyError("Esta mesa já foi iniciada.")
+            active_bet = session.scalar(select(Bet.discord_id).where(
+                Bet.status == "active", Bet.discord_id.in_([str(p) for p in players])))
+            if active_bet or self._active_uno_player(session, players):
+                raise EconomyError("Um jogador já tem um jogo em andamento. Termine-o primeiro.")
+            users = [self.user(session, player_id) for player_id in players]
+            if any(user.balance < stake for user in users):
+                raise EconomyError("Um jogador não tem saldo suficiente para essa aposta.")
+            receipt = {"game_id": game_id, "status": "active", "players": players,
+                       "participants": players, "winners": [], "stake": stake,
+                       "pot": stake * len(players), "payouts": {}, "rewards": {},
+                       "refunds": {}}
+            session.add(UnoGame(id=game_id, stake=stake, status="active",
+                                receipt=json.dumps(receipt)))
+            for user in users:
+                user.balance -= stake
+                session.add(UnoPlayer(game_id=game_id, discord_id=user.discord_id))
+            return receipt
+
+    def finish_uno_game(self, game_id, winners, participants=None):
+        """Pay a table exactly once; participants excludes players who forfeited.
+
+        The first winner earns 30 D$, and every participant earns 5 D$. Split
+        the entire pot across winners, giving remainder coins in finishing order.
+        A retry returns the original receipt, even if the table was refunded.
+        """
+        winners = self._uno_ids(winners, "Os vencedores")
+        if participants is not None:
+            participants = self._uno_ids(participants, "Os participantes")
+        with self.transaction() as session:
+            game = session.get(UnoGame, game_id)
+            if game is None:
+                raise EconomyError("Mesa não encontrada.")
+            receipt = self._uno_receipt(game)
+            players = receipt["players"]
+            eligible = players if participants is None else participants
+            if (not 1 <= len(winners) < len(players)
+                    or not set(eligible).issubset(players)
+                    or not set(winners).issubset(eligible)):
+                raise EconomyError("Vencedores e participantes não correspondem à mesa.")
+            if game.status != "active":
+                return receipt
+            share, remainder = divmod(receipt["pot"], len(winners))
+            payouts = {winner: share + (index < remainder)
+                       for index, winner in enumerate(winners)}
+            rewards = {player_id: 5 + (30 if player_id == winners[0] else 0)
+                       for player_id in eligible}
+            for player_id in eligible:
+                # Preserve all winnings, even above the normal administrative cap
+                # or SQLite's native integer range, as settle_bet does.
+                self.user(session, player_id).balance += (
+                    payouts.get(player_id, 0) + rewards[player_id])
+            receipt.update(status="settled", participants=eligible, winners=winners,
+                           payouts=payouts, rewards=rewards)
+            game.status, game.receipt = "settled", json.dumps(receipt)
+            return receipt
+
+    def _refund_uno_game(self, session, game):
+        receipt = self._uno_receipt(game)
+        if game.status == "active":
+            refunds = {player_id: game.stake for player_id in receipt["players"]}
+            for player_id, amount in refunds.items():
+                self.user(session, player_id).balance += amount
+            receipt.update(status="refunded", refunds=refunds)
+            game.status, game.receipt = "refunded", json.dumps(receipt)
+        return receipt
+
+    def cancel_uno_game(self, game_id):
+        """Refund each original stake once; settled tables keep their receipt."""
+        with self.transaction() as session:
+            game = session.get(UnoGame, game_id)
+            if game is None:
+                raise EconomyError("Mesa não encontrada.")
+            return self._refund_uno_game(session, game)
+
+    def recover_uno_games(self):
+        """Cancel and refund interrupted tables once before handling new commands.
+
+        Cards and turns live in memory, so a restart cancels rather than resumes.
+        """
+        with self.transaction() as session:
+            games = session.scalars(select(UnoGame).where(UnoGame.status == "active")).all()
+            for game in games:
+                self._refund_uno_game(session, game)
+            return len(games)
 
     def leaderboard(self, page=1, page_size=10):
         with Session(self.engine) as session:

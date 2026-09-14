@@ -54,10 +54,41 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.slots 100` | `/slots amount:100` | Caça-níqueis; aliases: `slot`, `slotmachine` |
 | `r.blackjack 100` | `/blackjack amount:100` | Blackjack com botões; aliases: `bj`, `21` |
 | `r.mines 100 [bombas]` | `/mines amount:100 [mine_count]` | Escolha 1–15 bombas no menu ou informe a quantidade. Tabuleiro 4×4; alias: `minas` |
+| `r.six iniciar` ou `r.uno` | `/six iniciar` | Uno em tópicos públicos, com 2–20 pessoas, mãos privadas, regras configuráveis e apostas opcionais |
 
 Nos comandos slash, preencha os campos que o Discord oferece; os itens entre colchetes são opcionais. O Discord exige um subcomando em grupos, então visualizar o perfil usa `/profile view`. Todos os aliases da tabela continuam disponíveis com `r.`. Os dois formatos executam os mesmos comandos, com as mesmas permissões, conversores, saldos e cooldowns; alternar entre prefixo e slash não permite repetir uma recompensa ou evitar o intervalo. Os comandos de administração alteram apenas o saldo disponível; apostas já iniciadas continuam com sua liquidação normal.
 
 O ranking é global entre todos os usuários registrados e mostra o saldo disponível, sem apostas em andamento. Empates são ordenados pelo ID do usuário. Nomes vêm do cache do Discord, com ID como alternativa. A imagem é desenhada localmente com Pillow, sem serviços de geração ou downloads de avatares.
+
+## Uno / Six
+
+Use **`/six iniciar`**, **`r.six iniciar`** ou **`r.uno`** em um canal de texto. O painel lista as mesas desse canal; **Criar nova mesa** publica um convite e abre um **tópico público**. Todos que têm acesso ao canal podem acompanhar o tópico e entrar no lobby. O painel slash é privado; o painel por prefixo é público e seus controles pertencem a quem executou o comando. Convites e controles da mesa são compartilhados.
+
+O lobby aceita **2–20 jogadores**. O anfitrião escolhe as regras, **1, 2 ou 3 vencedores** (sempre menos que a quantidade de jogadores) e a aposta: casual, **100, 1.000 ou 10.000 D$ por pessoa**. As opções começam em modo casual, um vencedor e desafio do +4 ativo. **Entrar** aceita as configurações exibidas. Se o anfitrião mudar regras, quantidade de vencedores ou aposta, os demais precisam clicar em **Entrar** novamente; nenhum dinheiro é debitado até **Começar**. Todos os débitos são realizados juntos, e saldo insuficiente de uma pessoa impede o início sem cobrar as outras.
+
+O anfitrião também escolhe **Normal, Meme ou Overwatch** no seletor **Baralho da mesa**. Cada tema usa imagens próprias na mesa pública, nas mãos privadas e na confirmação da jogada. Essa escolha visual não exige novo aceite dos participantes e fica fixa quando a partida começa.
+
+Somente o anfitrião começa a partida. **Sair** funciona no lobby; se o anfitrião sair, o próximo participante assume. O anfitrião pode cancelar o lobby. A equipe com **Gerenciar Mensagens**, **Gerenciar Tópicos** ou Administrador pode encerrar mesas pelo seletor do painel. Lobbies expiram após 15 minutos. Cada pessoa participa de uma mesa por vez; após começar, também fica impedida de apostar nos outros jogos até a partida acabar.
+
+Cada jogador recebe **7 cartas**. A mesa pública mostra a carta do topo, a cor atual, a direção, a vez e a quantidade de cartas de cada pessoa. **Ver minha mão** envia uma imagem e menus que só o próprio jogador pode ver. Escolha a carta, revise a seleção e clique em **Jogar**; **Voltar** permite corrigir. Coringas abrem quatro botões de cor, e o 7 abre a escolha de outro jogador quando a regra de troca está ativa. Mãos grandes são divididas em páginas de até 25 cartas. Depois de mudanças na partida, uma seleção antiga é recusada e deve ser reaberta.
+
+- **Regras básicas:** mesma cor, número ou símbolo; bloquear pula uma pessoa e inverter muda a direção (com dois jogadores, joga novamente). Compre uma carta; se ela servir, jogue a carta recém-comprada ou passe. Se não servir, a vez passa automaticamente. Cada vez dura **60 segundos**; ao esgotar, compra 1 e passa, ou aceita a dívida inteira de +2/+4. Comprar não reinicia o prazo da vez.
+- **Gritar Uno:** ao ficar com uma carta, o botão fica disponível durante **3 segundos**. Também é possível declarar Uno na confirmação, antes de jogar. Depois do prazo, outro jogador pode apertar **Pegar!** e aplicar +2, antes da próxima ação. Uma ação rápida não reduz os três segundos de declaração. Trocas de mãos exigem nova declaração de quem receber uma carta.
+- **Desafiar +4:** é possível blefar mesmo tendo a cor atual. Se o desafio acertar, o autor compra 4 e quem desafiou mantém a vez. Se errar, quem desafiou compra a dívida +2 e perde a vez. Com o desafio desligado, o bot recusa +4 se houver carta da cor atual. Um +4 final aguarda a aceitação ou o desafio antes de definir a vitória.
+- **Empilhar +2/+4:** qualquer +2 ou +4 pode responder a uma dívida, aumentando a compra para o próximo. Desafiar um +4 empilhado trata somente o último +4; se o blefe for confirmado, a dívida anterior continua pendente.
+- **Jogar cartas repetidas:** permite jogar juntas cartas numéricas de mesmo valor; pelo menos uma precisa combinar com a mesa. Cartas de ação são jogadas individualmente. A confirmação mostra a ordem em que as cartas serão descartadas.
+- **Comprar até jogar:** compra até encontrar uma carta utilizável; depois permite jogá-la ou passar. Se todas as cartas disponíveis estiverem nas mãos, a compra termina sem travar o jogo.
+- **7–0:** o 7 troca sua mão com a de outra pessoa; o 0 gira todas as mãos na direção da rodada. A troca acontece antes de conferir a vitória: se a mão vazia for transferida, quem a receber termina. Vários 7 ou 0 juntos aplicam a troca uma vez.
+
+O baralho tem 108 cartas, usando dois exemplares nas mesas com 16–20 jogadores para comportar as mãos iniciais. A abertura usa uma carta numérica. Quando o monte acaba, o descarte é embaralhado novamente, preservando o topo. A partida termina ao atingir a quantidade de vencedores escolhida. O pote é dividido integralmente entre eles, com as sobras entregues na ordem de chegada. A recompensa do diagrama foi integrada ao **DarkMoney**: **+30 D$ para o primeiro colocado e +5 D$ para cada participante que jogou até o fim**, incluindo o campeão.
+
+As tabelas `uno_games` e `uno_players` guardam reservas e resultados no SQLite; pagamentos e reembolsos são feitos uma única vez, inclusive com cliques simultâneos. O estado das cartas e os botões ficam em memória. **Reiniciar ou recarregar o bot encerra as mesas; apostas pendentes são devolvidas e não há recompensa por partidas interrompidas.** Abra uma nova mesa depois do reinício. Remover o tópico ou encerrar pela equipe também cancela e devolve as apostas. Execute uma única instância por banco.
+
+O baralho ilustrado ainda pode ser concluído separadamente: o jogo usa **cartas provisórias desenhadas localmente**, com cores, ações e visuais diferentes para cada tema. Coloque os PNGs finais em **`assets/uno/normal/`**, **`assets/uno/meme/`** e **`assets/uno/overwatch/`**, seguindo [os nomes das imagens](assets/uno/README.md). Cada arte disponível substitui sua carta provisória automaticamente; arquivos ausentes ou inválidos continuam usando a alternativa local do tema escolhido.
+
+O bot precisa de **Ver Canal, Enviar Mensagens, Inserir Links, Anexar Arquivos, Ler Histórico de Mensagens, Criar Tópicos Públicos e Enviar Mensagens em Tópicos**. Os tópicos herdam a visibilidade do canal. Referências: [tópicos públicos no Nextcord](https://docs.nextcord.dev/en/stable/api.html#nextcord.Message.create_thread) e [respostas privadas de interações](https://docs.nextcord.dev/en/stable/interactions.html).
+
+Os testes `test_uno_*.py` verificam regras e partidas completas simuladas, mãos privadas, botões, concorrência, apostas, cancelamento, recuperação e renderização sem conexão ao Discord.
 
 ## Quiz automático
 

@@ -13,13 +13,14 @@ SEED_QUESTIONS = (
     ("Quanto é 7 × 8?", ["56"]),
     ("Quanto é 144 dividido por 12?", ["12"]),
     ("Qual é a raiz quadrada de 81?", ["9"]),
-    ("Quantos lados tem um hexágono?", ["6", "seis"]),
+    ("Quem é o criador da teoria do gato na caixa?", ["Erwin Schrödinger", "Schrödinger", "Schrodinger"]),
     ("Complete a sequência: 2, 4, 8, 16, …", ["32"]),
     ("Quanto é 15% de 200?", ["30"]),
     ("Quantos minutos há em duas horas e meia?", ["150"]),
-    ("Qual é o plural de ‘animal’?", ["animais"]),
-    ("Qual é o antônimo de ‘quente’?", ["frio"]),
+    ("Qual é o país onde vivemos?", ["Brasil"]),
+    ("Quem é o meu criador?", ["Caio"]),
     ("Qual é o resultado de (3 + 5) × 2?", ["16"]),
+    ("Quanto é 20 + 20 + 20 + 7?", ["67", "Six-Seven", "six seven"])
 )
 
 

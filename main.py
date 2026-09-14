@@ -42,7 +42,7 @@ def create_bot():
     intents.message_content = True
     bot = commands.Bot(command_prefix="r.", intents=intents, help_command=None,
                        allowed_mentions=nextcord.AllowedMentions.none())
-    for extension in ("economy", "leaderboard", "games", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz"):
+    for extension in ("economy", "leaderboard", "games", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno"):
         bot.load_extension(f"cogs.{extension}")
 
     @bot.event
@@ -60,6 +60,8 @@ def create_bot():
             name = command.strip().removeprefix("r.").removeprefix("/")
             if name == "profile view":
                 name = "profile"
+            if name in ("six iniciar", "uno iniciar"):
+                name = "six"
             target = bot.get_command(name)
             if target is None:
                 await ctx.send("Comando não encontrado. Use `r.help` ou `/help` para ver a lista.")

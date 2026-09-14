@@ -24,6 +24,17 @@ class SlashCommands(commands.Cog):
     async def ping(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "ping")
 
+    @nextcord.slash_command(name="six", description="Uno em mesas públicas, com mãos privadas e regras configuráveis.",
+                            contexts=GUILD_ONLY)
+    async def six(self, interaction: nextcord.Interaction):
+        pass
+
+    @six.subcommand(name="iniciar", description="Veja as mesas do canal ou crie uma mesa de Uno.")
+    async def six_iniciar(self, interaction: nextcord.Interaction):
+        ctx = InteractionContext(self.bot, interaction, self.bot.get_command("six"), {"action": "iniciar"})
+        await interaction.response.defer(ephemeral=True)
+        await self.bot.invoke(ctx)
+
     @nextcord.slash_command(name="help", description="Lista os comandos r. e /, ou mostra a ajuda de um comando.")
     async def help(self, interaction: nextcord.Interaction,
                    command: str = nextcord.SlashOption(description="Ex.: mines, pay ou profile background.", required=False)):
