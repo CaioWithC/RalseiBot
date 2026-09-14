@@ -185,6 +185,13 @@ class SlashCommands(commands.Cog):
                     amount: str = nextcord.SlashOption(description=BET_DESCRIPTION)):
         await self.invoke(interaction, "slots", amount=amount)
 
+    @nextcord.slash_command(name="poker", description="Texas Hold’em com Ralsei: aposte D$ com amigos ou 4 bots.",
+                            contexts=GUILD_ONLY)
+    async def poker(self, interaction: nextcord.Interaction,
+                    amount: str = nextcord.SlashOption(description="Entrada por pessoa: mínimo 20 D$. Ex.: 1000, 10k, 1m.",
+                                                       default="1000", required=False)):
+        await self.invoke(interaction, "poker", amount=amount)
+
     @nextcord.slash_command(name="blackjack", description="Jogue blackjack com botões e aposte DarkMoney.")
     async def blackjack(self, interaction: nextcord.Interaction,
                         amount: str = nextcord.SlashOption(description=BET_DESCRIPTION)):

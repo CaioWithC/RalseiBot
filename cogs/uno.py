@@ -17,6 +17,7 @@ from db import EconomyError, database
 log = logging.getLogger(__name__)
 GREEN = 0x77E5BC
 LOBBY_SECONDS = 900
+BOARD_MESSAGE_INTERVAL = 10
 RULE_OPTIONS = (
     ("challenge_draw4", "Desafiar +4", "Chame o blefe: quem tinha a cor compra 4; desafio errado compra 6."),
     ("stack_draw", "Empilhar +2/+4", "Responda qualquer +2/+4 com outro +2/+4 e passe a soma."),
@@ -62,6 +63,9 @@ class Table:
     receipt: object = None
     uno_display: tuple = ()
     retry_at: float = 0
+    message_count: int = 0
+    notified_turn: tuple = ()
+    notification_task: object = None
 
 
 class SafeView(nextcord.ui.View):
@@ -496,7 +500,7 @@ class Uno(commands.Cog):
                 return
             await self.refresh_lobby(table)
 
-    async def refresh_lobby(self, table):
+    async def refresh_lobby(self, table, *, repost=False):
         embed = nextcord.Embed(title="🃏 Mesa de Six · Uno", color=0xF5CD47,
             description=f"{len(table.members)}/20 jogadores · 60s por vez · o anfitrião começa quando quiser\n\n" +
                 "\n".join(f"{'✅' if uid in table.ready else '⏳'} <@{uid}>" + (" · 👑 anfitrião" if uid == table.host_id else "")
@@ -507,13 +511,38 @@ class Uno(commands.Cog):
                         if getattr(table.rules, key)) or "Clássicas, sem desafio +4", inline=False)
         embed.set_footer(text="Entrar aceita regras e aposta. Alterações exigem novo aceite. Lobby expira em 15 min.")
         view = LobbyView(self, table)
-        if table.message is None:
-            table.message = await table.thread.send(embed=embed, view=view)
-        else:
-            await table.message.edit(embed=embed, view=view)
+        await self.write_board(table, repost=repost, embed=embed, view=view)
         if table.view:
             table.view.stop()
         table.view = view
+
+    async def write_board(self, table, *, repost=False, **kwargs):
+        previous = table.message
+        try:
+            if previous is None or repost:
+                table.message = await table.thread.send(**kwargs)
+                table.message_count = 0
+            else:
+                if "file" in kwargs:
+                    kwargs["attachments"] = []
+                await previous.edit(**kwargs)
+        except Exception:
+            if kwargs.get("view"):
+                kwargs["view"].stop()
+            raise
+        if repost and previous is not None:
+            # Keep the old board usable until its replacement has been delivered.
+            if table.view:
+                table.view.stop()
+            try:
+                await previous.delete()
+            except nextcord.NotFound:
+                pass
+            except nextcord.HTTPException:
+                try:
+                    await previous.edit(view=None)
+                except nextcord.HTTPException:
+                    log.warning("Could not remove old Uno board for %s", table.id)
 
     async def disable_invite(self, table):
         if table.invite_view:
@@ -556,7 +585,7 @@ class Uno(commands.Cog):
         embed.set_image(url="attachment://uno-top.png")
         return embed
 
-    async def publish(self, table, *, open_uno=()):
+    async def publish(self, table, *, open_uno=(), repost=False):
         game = table.game
         if game.finished:
             table.receipt = self.storage.finish_uno_game(table.id, list(game.winners))
@@ -571,8 +600,8 @@ class Uno(commands.Cog):
                 game.uno_pending[uid] = self.clock() + UNO_SECONDS
         view = None if game.finished else GameView(self, table)
         try:
-            await table.message.edit(embed=self.game_embed(table), view=view, attachments=[],
-                                     file=nextcord.File(data, filename="uno-top.png"))
+            await self.write_board(table, repost=repost, embed=self.game_embed(table), view=view,
+                                   file=nextcord.File(data, filename="uno-top.png"))
         except nextcord.HTTPException:
             if not game.finished:
                 raise
@@ -591,11 +620,45 @@ class Uno(commands.Cog):
         if game.finished:
             table.status = "finished"
             self.release(table)
+        else:
+            self.notify_turn(table)
+
+    def notify_turn(self, table):
+        turn = (table.game.current_player, table.game.turn_deadline)
+        if table.notified_turn == turn:
+            return
+        table.notified_turn = turn
+        if table.notification_task:
+            table.notification_task.cancel()
+        # DM delivery must not hold up card actions or the three-second Uno window.
+        table.notification_task = asyncio.create_task(self.send_turn_notice(table, turn))
+
+    async def send_turn_notice(self, table, turn):
+        player_id, deadline = turn
+        try:
+            user = self.bot.get_user(player_id) or await self.bot.fetch_user(player_id)
+            if (table.status != "playing" or self.clock() >= deadline
+                    or (table.game.current_player, table.game.turn_deadline) != turn):
+                return
+            # Link to the thread so the notice remains useful after the board moves.
+            link = f"https://discord.com/channels/{table.guild_id}/{table.thread.id}"
+            await user.send(
+                f"<@{player_id}>, é a sua vez no Uno! 🃏\n"
+                f"Abra a mesa e toque em **Ver minha mão** para jogar:\n{link}",
+                allowed_mentions=nextcord.AllowedMentions(
+                    everyone=False, roles=False, users=[nextcord.Object(id=player_id)], replied_user=False))
+        except nextcord.HTTPException:
+            log.warning("Could not send Uno turn DM to %s for table %s", player_id, table.id)
+        except Exception:
+            log.exception("Uno turn notification failed for table %s", table.id)
 
     def uno_display(self, table):
         return tuple(sorted((uid, self.clock() < deadline) for uid, deadline in table.game.uno_pending.items()))
 
     def release(self, table):
+        if table.notification_task:
+            table.notification_task.cancel()
+            table.notification_task = None
         for uid in table.members:
             if self.memberships.get(uid) == table.id:
                 self.memberships.pop(uid, None)
@@ -723,6 +786,32 @@ class Uno(commands.Cog):
                     log.exception("Uno timer failed for %s", table.id)
                     if table.status != "finishing":
                         await self.cancel(table, "A mesa foi interrompida; apostas devolvidas.")
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.guild is None or message.author.bot or not isinstance(message.channel, nextcord.Thread):
+            return
+        table = next((table for table in self.tables.values()
+                      if table.thread and table.thread.id == message.channel.id), None)
+        if table is None:
+            return
+        async with table.lock:
+            if table.status not in ("lobby", "playing") or table.message is None:
+                return
+            # Events queued during an upload may already be above the new board.
+            if message.id <= table.message.id:
+                return
+            table.message_count += 1
+            if table.message_count < BOARD_MESSAGE_INTERVAL:
+                return
+            try:
+                if table.status == "lobby":
+                    await self.refresh_lobby(table, repost=True)
+                else:
+                    await self.publish(table, repost=True)
+            except Exception:
+                # Retain the existing board and retry on the next message.
+                log.exception("Could not move Uno board for table %s", table.id)
 
     @commands.Cog.listener()
     async def on_thread_delete(self, thread):

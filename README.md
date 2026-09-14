@@ -53,12 +53,29 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.pat @membro` | `/pat member:@membro` | Faz carinho em alguém com GIF; alias: `carinho` |
 | `r.slots 100` | `/slots amount:100` | Caça-níqueis; aliases: `slot`, `slotmachine` |
 | `r.blackjack 100` | `/blackjack amount:100` | Blackjack com botões; aliases: `bj`, `21` |
+| `r.poker [entrada]` | `/poker [amount]` | Texas Hold’em com Ralsei; 1 pessoa joga com 4 bots, ou 2–6 pessoas jogam entre si; alias: `holdem` |
 | `r.mines 100 [bombas]` | `/mines amount:100 [mine_count]` | Escolha 1–15 bombas no menu ou informe a quantidade. Tabuleiro 4×4; alias: `minas` |
 | `r.six iniciar` ou `r.uno` | `/six iniciar` | Uno em tópicos públicos, com 2–20 pessoas, mãos privadas, regras configuráveis e apostas opcionais |
 
 Nos comandos slash, preencha os campos que o Discord oferece; os itens entre colchetes são opcionais. O Discord exige um subcomando em grupos, então visualizar o perfil usa `/profile view`. Todos os aliases da tabela continuam disponíveis com `r.`. Os dois formatos executam os mesmos comandos, com as mesmas permissões, conversores, saldos e cooldowns; alternar entre prefixo e slash não permite repetir uma recompensa ou evitar o intervalo. Os comandos de administração alteram apenas o saldo disponível; apostas já iniciadas continuam com sua liquidação normal.
 
 O ranking é global entre todos os usuários registrados e mostra o saldo disponível, sem apostas em andamento. Empates são ordenados pelo ID do usuário. Nomes vêm do cache do Discord, com ID como alternativa. A imagem é desenhada localmente com Pillow, sem serviços de geração ou downloads de avatares.
+
+## Poker / Texas Hold’em
+
+Use **`r.poker 1000`**, **`r.holdem 1k`** ou **`/poker amount:1000`** em um servidor. A entrada padrão é **1.000 D$**, com mínimo de **20 D$**; aceita números inteiros e sufixos `K`/`M`. O lobby fica aberto por **5 minutos**. **Entrar** aceita o valor exibido; **Sair** remove sua participação antes da partida. Se o anfitrião sair, a próxima pessoa assume. Só o anfitrião pode **Começar** ou **Cancelar** o lobby.
+
+Ao começar com **uma pessoa**, entram **Kris, Susie, Lancer e Noelle**, quatro bots controlados pelo jogo. Com **2–6 pessoas**, a partida acontece apenas entre os participantes. **Ralsei é sempre o dealer**, representado pela **foto de perfil atual do bot no Discord**. A imagem pública usa a mesa fornecida em `assets/poker/table.png` e as 52 cartas de `assets/cards`, com nomes como `ace_of_spades.png` e `10_of_hearts.png`. Mantenha esses assets disponíveis ao copiar ou implantar o projeto.
+
+Cada partida joga **uma mão completa de No Limit Texas Hold’em**. Todos começam com o mesmo valor de fichas. O small blind é `max(1, entrada // 100)` e o big blind é o dobro; o botão é sorteado. São distribuídas duas cartas privadas por pessoa, seguidas de pré-flop, flop, turn e river. **Ver minhas cartas** mostra as cartas em uma mensagem privada, inclusive ao usar o prefixo. A mesa pública só revela as mãos que chegaram ao showdown. Mãos descartadas e vitórias por desistência preservam as cartas privadas.
+
+Use **Mesa (check)**, **Pagar**, **Aumentar**, **All-in** ou **Desistir (fold)**. No formulário de aumento, informe o **total que deseja colocar naquela rodada**, incluindo o que já pagou. Aumentos mínimos, all-ins curtos, reabertura das apostas, potes laterais e empates são tratados pelo motor do jogo. O melhor conjunto de cinco cartas vence, podendo usar ambas, uma ou nenhuma das cartas privadas. Sobras de divisão são entregues aos vencedores na ordem após o botão. Referência das regras: [Texas Hold’em](https://www.pokerstars.com/poker/games/texas-holdem/) e [apostas e potes laterais](https://www.pokerstars.com/help/articles/poker-rules-master/).
+
+Cada pessoa tem **60 segundos por jogada**. Ao esgotar o prazo, passa se não houver aposta pendente; caso contrário, desiste. Consultar as cartas ou abrir o formulário de aumento não renova o prazo. Os bots decidem usando suas próprias cartas e informações públicas, sem acesso às cartas privadas dos adversários.
+
+A entrada inteira é reservada ao começar; os débitos de todos os participantes acontecem em uma única transação. Se alguém não tiver saldo, ninguém é cobrado. **A entrada é o limite que você pode perder naquela mão.** Ao terminar, as fichas restantes mais os potes ganhos são creditados em D$, sem taxa, uma única vez. No solo, a casa fornece as fichas dos quatro bots; eles não criam contas no ranking. Os resultados dos bots não são creditados a usuários do Discord.
+
+Cada pessoa ocupa uma mesa de poker por vez. Durante a mão, a reserva também impede apostas nos outros jogos. As tabelas `poker_games` e `bets` guardam entradas e recibos; cartas e turnos ficam na memória. Reiniciar ou recarregar o bot, excluir a mensagem/canal da mesa ou uma falha que interrompa a partida devolve as entradas pendentes. Resultados já pagos permanecem pagos. Uma mão iniciada não pode ser cancelada pelo anfitrião. Para jogar outra, abra uma nova mesa com `/poker` ou `r.poker`.
 
 ## Uno / Six
 
@@ -71,6 +88,8 @@ O anfitrião também escolhe **Normal, Meme ou Overwatch** no seletor **Baralho 
 Somente o anfitrião começa a partida. **Sair** funciona no lobby; se o anfitrião sair, o próximo participante assume. O anfitrião pode cancelar o lobby. A equipe com **Gerenciar Mensagens**, **Gerenciar Tópicos** ou Administrador pode encerrar mesas pelo seletor do painel. Lobbies expiram após 15 minutos. Cada pessoa participa de uma mesa por vez; após começar, também fica impedida de apostar nos outros jogos até a partida acabar.
 
 Cada jogador recebe **7 cartas**. A mesa pública mostra a carta do topo, a cor atual, a direção, a vez e a quantidade de cartas de cada pessoa. **Ver minha mão** envia uma imagem e menus que só o próprio jogador pode ver. Escolha a carta, revise a seleção e clique em **Jogar**; **Voltar** permite corrigir. Coringas abrem quatro botões de cor, e o 7 abre a escolha de outro jogador quando a regra de troca está ativa. Mãos grandes são divididas em páginas de até 25 cartas. Depois de mudanças na partida, uma seleção antiga é recusada e deve ser reaberta.
+
+A cada **10 mensagens de pessoas no tópico**, o bot republica a mesa no final da conversa e remove a mensagem anterior, tanto no lobby quanto durante a partida. Mensagens de bots não entram na contagem. No início de cada turno, o jogador recebe uma **DM com sua menção e o link do tópico**; atualizar ou reposicionar a mesa no mesmo turno não repete o aviso. DMs bloqueadas não interrompem a partida.
 
 - **Regras básicas:** mesma cor, número ou símbolo; bloquear pula uma pessoa e inverter muda a direção (com dois jogadores, joga novamente). Compre uma carta; se ela servir, jogue a carta recém-comprada ou passe. Se não servir, a vez passa automaticamente. Cada vez dura **60 segundos**; ao esgotar, compra 1 e passa, ou aceita a dívida inteira de +2/+4. Comprar não reinicia o prazo da vez.
 - **Gritar Uno:** ao ficar com uma carta, o botão fica disponível durante **3 segundos**. Também é possível declarar Uno na confirmação, antes de jogar. Depois do prazo, outro jogador pode apertar **Pegar!** e aplicar +2, antes da próxima ação. Uma ação rápida não reduz os três segundos de declaração. Trocas de mãos exigem nova declaração de quem receber uma carta.

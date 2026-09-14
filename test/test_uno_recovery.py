@@ -65,7 +65,8 @@ class UnoRecoveryTests(unittest.IsolatedAsyncioTestCase):
         for player_id in (1, 2, 3):
             self.db.add_balance(player_id, 100)
         self.now = 0.0
-        self.cog = Uno(SimpleNamespace(), storage=self.db, clock=lambda: self.now)
+        bot = SimpleNamespace(get_user=lambda player_id: SimpleNamespace(send=AsyncMock()))
+        self.cog = Uno(bot, storage=self.db, clock=lambda: self.now)
         self.table = Table("recovery", 10, 20, 1, {1: "A", 2: "B", 3: "C"})
         self.table.game = UnoGame([1, 2, 3], now=self.now)
         self.table.status = "playing"
@@ -78,6 +79,8 @@ class UnoRecoveryTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self):
         self.cog.tick.cancel()
+        if self.table.notification_task:
+            self.table.notification_task.cancel()
         if self.table.view:
             self.table.view.stop()
         self.db.engine.dispose()

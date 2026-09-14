@@ -91,7 +91,9 @@ class UnoUITests(unittest.IsolatedAsyncioTestCase):
         self.channel.id, self.channel.guild = 50, self.guild
         self.channel.send = AsyncMock(return_value=self.invite)
         self.channel.permissions_for.return_value = nextcord.Permissions.all()
-        self.cog = Uno(Mock(), self.db, clock=lambda: self.now)
+        bot = Mock()
+        bot.get_user.return_value = SimpleNamespace(send=AsyncMock())
+        self.cog = Uno(bot, self.db, clock=lambda: self.now)
         self.views = []
         for player in (1, 2, 3):
             self.db.add_balance(player, 1000)

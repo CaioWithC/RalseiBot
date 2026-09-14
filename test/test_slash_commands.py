@@ -45,7 +45,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.db.add_balance(self.author.id, 10_000)
         self.economy_patch = patch("cogs.economy.database", self.db)
         self.economy_patch.start()
-        for name in ("Games", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets", "Missions", "Confessions", "Quiz", "Uno"):
+        for name in ("Games", "Poker", "Leaderboard", "Social", "Relationships", "Roleplay", "Tickets", "Missions", "Confessions", "Quiz", "Uno"):
             self.bot.get_cog(name).storage = self.db
         self.apps = {command.name: command for command in self.bot.get_all_application_commands()}
         self.views = []
@@ -158,6 +158,20 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         expected = {slash_name(c) for c in self.bot.walk_commands()}
         self.assertEqual(registered, expected)
         self.assertEqual(self.bot.command_prefix, "r.")
+
+    async def test_poker_slash_and_prefix_use_same_buyin_and_avatar(self):
+        self.bot._connection.user.display_avatar = self.author.display_avatar
+        interaction = await self.slash("poker", amount="1k")
+        table = next(iter(self.bot.get_cog("Poker").tables.values()))
+        self.assertEqual(table.stake, 1000)
+        self.assertEqual(table.dealer_avatar, png())
+        self.assertIn("Poker", interaction.sent[-1]["embed"].title)
+        self.assertEqual(self.db.balance(self.author.id), 10_000)
+        await self.bot.get_cog("Poker").cancel(table)
+        ctx = await self.prefix_context("r.holdem 1k")
+        await self.bot.invoke(ctx)
+        self.assertFalse(ctx.command_failed)
+        self.assertEqual(next(iter(self.bot.get_cog("Poker").tables.values())).stake, 1000)
 
     async def test_six_slash_is_private_and_uno_prefix_opens_the_same_panel(self):
         channel = Mock(spec=nextcord.TextChannel)

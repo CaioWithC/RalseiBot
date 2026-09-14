@@ -83,6 +83,13 @@ class UnoPlayer(Base):
     discord_id = Column(String, primary_key=True, index=True)
 
 
+class PokerGame(Base):
+    __tablename__ = "poker_games"
+    id = Column(String, primary_key=True)
+    status = Column(String, nullable=False, default="active", index=True)
+    receipt = Column(String, nullable=False)
+
+
 class DailyClaim(Base):
     __tablename__ = "daily_claims"
     discord_id = Column(String, primary_key=True)
@@ -391,6 +398,8 @@ class Database:
             user = self.user(session, bet.discord_id)
             if bet.status != "active":
                 return user.balance
+            if bet.game == "poker":
+                raise EconomyError("O poker deve ser liquidado junto com toda a mesa.")
             amount = bet.stake if payout is None else payout
             # Preserve full winnings, including amounts above SQLite's integer range.
             user.balance += amount
@@ -401,11 +410,14 @@ class Database:
     def recover_bets(self):
         """Refund unfinished games once on startup, before accepting commands."""
         with self.transaction() as session:
+            poker_count = 0
+            for game in session.scalars(select(PokerGame).where(PokerGame.status == "active")).all():
+                poker_count += len(self._refund_poker_game(session, game)["humans"])
             bets = session.scalars(select(Bet).where(Bet.status == "active")).all()
             for bet in bets:
                 self.user(session, bet.discord_id).balance += bet.stake
                 bet.payout, bet.status = bet.stake, "refunded"
-            return len(bets)
+            return len(bets) + poker_count
 
     @staticmethod
     def _uno_ids(player_ids, label):
@@ -530,6 +542,94 @@ class Database:
             games = session.scalars(select(UnoGame).where(UnoGame.status == "active")).all()
             for game in games:
                 self._refund_uno_game(session, game)
+            return len(games)
+
+    @staticmethod
+    def _poker_receipt(game):
+        receipt = json.loads(game.receipt)
+        for key in ("payouts", "refunds"):
+            receipt[key] = {int(pid): amount for pid, amount in receipt[key].items()}
+        return receipt
+
+    def start_poker_game(self, game_id, player_ids, stake, *, bots=0):
+        """Reserve a fixed buy-in for all humans in one transaction.
+
+        Solo tables have four house-funded bot seats (-1 through -4). Each
+        seat's final stack is validated and recorded, including the bot stacks.
+        Active Bet rows make poker mutually exclusive with the other games.
+        """
+        players = self._uno_ids(player_ids, "Os jogadores")
+        self.positive(stake)
+        if (not isinstance(game_id, str) or not game_id.strip() or not 1 <= len(players) <= 6
+                or type(bots) is not int or bots != (4 if len(players) == 1 else 0)
+                or stake < 20):
+            raise EconomyError("Use entrada de pelo menos 20 D$ e 1–6 pessoas; solo inclui 4 bots.")
+        with self.transaction() as session:
+            if session.get(PokerGame, game_id) is not None:
+                raise EconomyError("Esta mesa já foi iniciada.")
+            active = session.scalar(select(Bet.id).where(
+                Bet.status == "active", Bet.discord_id.in_([str(pid) for pid in players])))
+            if active or self._active_uno_player(session, players):
+                raise EconomyError("Um jogador já tem um jogo em andamento. Termine-o primeiro.")
+            users = [self.user(session, pid) for pid in players]
+            if any(user.balance < stake for user in users):
+                raise EconomyError("Um jogador não tem saldo suficiente para entrar nesta mesa.")
+            seats = players + [-index for index in range(1, bots + 1)]
+            receipt = {"game_id": game_id, "humans": players, "seats": seats, "stake": stake,
+                       "total": stake * len(seats), "status": "active", "payouts": {}, "refunds": {}}
+            session.add(PokerGame(id=game_id, status="active", receipt=json.dumps(receipt)))
+            for user in users:
+                user.balance -= stake
+                session.add(Bet(id=f"poker:{game_id}:{user.discord_id}", discord_id=user.discord_id,
+                                game="poker", stake=stake, status="active"))
+            return receipt
+
+    def finish_poker_game(self, game_id, stacks):
+        """Credit every remaining stack atomically and exactly once."""
+        with self.transaction() as session:
+            game = session.get(PokerGame, game_id)
+            if game is None:
+                raise EconomyError("Mesa não encontrada.")
+            receipt = self._poker_receipt(game)
+            if game.status != "active":
+                return receipt
+            if (not isinstance(stacks, dict) or any(type(pid) is not int for pid in stacks)
+                    or set(stacks) != set(receipt["seats"])
+                    or any(type(amount) is not int or amount < 0 for amount in stacks.values())
+                    or sum(stacks.values()) != receipt["total"]):
+                raise EconomyError("As fichas finais não correspondem ao total da mesa.")
+            for pid in receipt["humans"]:
+                self.user(session, pid).balance += stacks[pid]
+                bet = session.get(Bet, f"poker:{game_id}:{pid}")
+                bet.status, bet.payout = "settled", stacks[pid]
+            receipt.update(status="settled", payouts=stacks)
+            game.status, game.receipt = "settled", json.dumps(receipt)
+            return receipt
+
+    def _refund_poker_game(self, session, game):
+        receipt = self._poker_receipt(game)
+        if game.status == "active":
+            refunds = {pid: receipt["stake"] for pid in receipt["humans"]}
+            for pid, amount in refunds.items():
+                self.user(session, pid).balance += amount
+                bet = session.get(Bet, f"poker:{game.id}:{pid}")
+                bet.status, bet.payout = "refunded", amount
+            receipt.update(status="refunded", refunds=refunds)
+            game.status, game.receipt = "refunded", json.dumps(receipt)
+        return receipt
+
+    def cancel_poker_game(self, game_id):
+        with self.transaction() as session:
+            game = session.get(PokerGame, game_id)
+            if game is None:
+                raise EconomyError("Mesa não encontrada.")
+            return self._refund_poker_game(session, game)
+
+    def recover_poker_games(self):
+        with self.transaction() as session:
+            games = session.scalars(select(PokerGame).where(PokerGame.status == "active")).all()
+            for game in games:
+                self._refund_poker_game(session, game)
             return len(games)
 
     def leaderboard(self, page=1, page_size=10):

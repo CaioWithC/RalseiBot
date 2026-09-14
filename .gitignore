@@ -8,4 +8,7 @@ __pycache__/
 .venv/
 .wheels/
 dockerfile
-assets/uno/
+assets/cards/
+assets/uno/meme
+assets/uno/overwatch
+assets/uno/normal
