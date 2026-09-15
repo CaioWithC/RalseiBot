@@ -23,6 +23,15 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | --- | --- | --- |
 | `r.help [comando]` | `/help [command]` | Lista os comandos ou mostra a ajuda de um deles |
 | `r.ping` | `/ping` | Verifica se o bot está online |
+| `r.ban @membro [motivo]` | `/ban member:@membro [reason]` | Bane um membro sem apagar suas mensagens; alias: `banir` |
+| `r.unban ID [motivo]` | `/unban user_id:ID [reason]` | Remove um banimento pelo ID; alias: `desbanir` |
+| `r.kick @membro [motivo]` | `/kick member:@membro [reason]` | Expulsa um membro; alias: `expulsar` |
+| `r.mute @membro 10m [motivo]` | `/mute member:@membro duration:10m [reason]` | Aplica timeout temporário; aliases: `timeout`, `silenciar` |
+| `r.unmute @membro [motivo]` | `/unmute member:@membro [reason]` | Remove o timeout; alias: `desmutar` |
+| `r.lock [#canal] [motivo]` | `/lock [channel] [reason]` | Bloqueia mensagens e tópicos para @everyone; alias: `trancar` |
+| `r.unlock [#canal] [motivo]` | `/unlock [channel] [reason]` | Restaura as permissões anteriores ao lock; alias: `destrancar` |
+| `r.clear 10` | `/clear amount:10` | Exclui até 100 mensagens anteriores ao comando; aliases: `limpar`, `purge` |
+| `r.slowmode 10 [#canal] [motivo]` | `/slowmode seconds:10 [channel] [reason]` | Define o modo lento em segundos; 0 desativa; alias: `modolento` |
 | `r.balance` | `/balance` | Saldo; aliases: `saldo`, `atm`, `bal` |
 | `r.daily` | `/daily` | Recompensa de 5.000–100.000 moedas uma vez por dia; renova às 00:00 GMT-3, persistente |
 | `r.missions [claim]` | `/missions [action:view/claim]` | Veja as missões diárias ou resgate todos os bônus concluídos; aliases: `mission`, `missoes`, `missões` |
@@ -57,9 +66,34 @@ Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza o
 | `r.mines 100 [bombas]` | `/mines amount:100 [mine_count]` | Escolha 1–15 bombas no menu ou informe a quantidade. Tabuleiro 4×4; alias: `minas` |
 | `r.six iniciar` ou `r.uno` | `/six iniciar` | Uno em tópicos públicos, com 2–20 pessoas, mãos privadas, regras configuráveis e apostas opcionais |
 
-Nos comandos slash, preencha os campos que o Discord oferece; os itens entre colchetes são opcionais. O Discord exige um subcomando em grupos, então visualizar o perfil usa `/profile view`. Todos os aliases da tabela continuam disponíveis com `r.`. Os dois formatos executam os mesmos comandos, com as mesmas permissões, conversores, saldos e cooldowns; alternar entre prefixo e slash não permite repetir uma recompensa ou evitar o intervalo. Os comandos de administração alteram apenas o saldo disponível; apostas já iniciadas continuam com sua liquidação normal.
+Nos comandos slash, preencha os campos que o Discord oferece; os itens entre colchetes são opcionais. O Discord exige um subcomando em grupos, então visualizar o perfil usa `/profile view`. Todos os aliases da tabela continuam disponíveis com `r.`. Os dois formatos executam os mesmos comandos, com as mesmas permissões, conversores, saldos e cooldowns; alternar entre prefixo e slash não permite repetir uma recompensa ou evitar o intervalo. Os comandos administrativos de economia alteram apenas o saldo disponível; apostas já iniciadas continuam com sua liquidação normal.
 
 O ranking é global entre todos os usuários registrados e mostra o saldo disponível, sem apostas em andamento. Empates são ordenados pelo ID do usuário. Nomes vêm do cache do Discord, com ID como alternativa. A imagem é desenhada localmente com Pillow, sem serviços de geração ou downloads de avatares.
+
+## Administração e moderação
+
+Os comandos de moderação funcionam somente em servidores, com as mesmas verificações em `r.` e `/`. Administradores podem usá-los; moderadores precisam das permissões correspondentes. O bot também precisa dessas permissões:
+
+| Comandos | Permissões necessárias |
+| --- | --- |
+| `ban`, `unban` | Banir Membros |
+| `kick` | Expulsar Membros |
+| `mute`, `unmute` | Moderar Membros |
+| `lock`, `unlock` | Ver Canal, Gerenciar Canais e Gerenciar Cargos no canal escolhido |
+| `clear` | Ver Canal, Gerenciar Mensagens e Ler Histórico de Mensagens no canal atual |
+| `slowmode` | Ver Canal e Gerenciar Canais no canal escolhido |
+
+O cargo mais alto do moderador e o do bot precisam estar acima do cargo do alvo. O dono do servidor dispensa a comparação do próprio cargo, mas o bot continua sujeito à hierarquia. Não é possível punir a si mesmo, o próprio bot ou o dono. O motivo é opcional, aceita até 400 caracteres e acompanha o ID do moderador no log de auditoria de ban, unban, kick, mute, unmute, lock, unlock e slowmode.
+
+`mute` usa o timeout nativo do Discord, que expira automaticamente mesmo com o bot desligado. A duração aceita um número inteiro seguido de `s`, `m`, `h` ou `d`: `30s`, `10m`, `2h`, `7d`, de 1 segundo até 28 dias. Bots e administradores não podem receber timeout. `unmute` remove esse timeout; não altera cargos de silêncio de outros bots. `unban` usa o ID como texto para preservar todos os dígitos; ative o Modo Desenvolvedor no Discord para copiar o ID.
+
+`lock` e `unlock` usam o canal atual quando nenhum é informado. O lock nega enviar mensagens, enviar em tópicos e criar tópicos públicos/privados na permissão de `@everyone`. **Administradores e cargos ou membros com permissões explícitas podem continuar enviando mensagens.** O canal continua com a mesma visibilidade. A tabela SQLite `channel_locks` salva os valores anteriores, incluindo permissões herdadas, antes da alteração; `unlock` os restaura mesmo após reiniciar, preservando outras permissões do canal. Locks repetidos não substituem o registro original. Sem um lock salvo, `unlock` não altera o canal. Se houver falha de comunicação durante um lock, use `unlock` para restaurar o estado salvo antes de tentar novamente. A alteração de permissões pode desvincular o canal da sincronização da categoria; o unlock restaura os valores salvos para `@everyone`.
+
+`clear` exclui de 1 a 100 mensagens anteriores à execução, sem incluir a mensagem do comando, sua resposta ou mensagens posteriores. A resposta informa a quantidade efetivamente excluída. Mensagens antigas são tratadas pelo Nextcord com exclusão individual quando necessário. `slowmode` aceita de 0 a 21600 segundos (6 horas). Os comandos de canal aceitam canais de texto; não aceitam tópicos, voz ou fóruns. Para informar motivo no prefixo de `lock`, `unlock` ou `slowmode`, inclua o `#canal` antes do motivo.
+
+Os testes em `test/test_moderation.py` verificam permissões de usuário e bot, hierarquia, duração de timeout, ações e motivos, restauração persistente do lock, concorrência, falhas do Discord, limites de limpeza/modo lento e execução das opções slash, sem login no Discord.
+
+Referência: [permissões e operações de canais no Nextcord](https://docs.nextcord.dev/en/v3.0.1/api.html#nextcord.TextChannel.set_permissions).
 
 ## Poker / Texas Hold’em
 

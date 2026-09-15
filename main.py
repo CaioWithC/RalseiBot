@@ -10,7 +10,7 @@ from nextcord.ext import commands
 load_dotenv()
 
 from db import EconomyError, database
-from cogs.command_support import DualCommand, slash_name
+from cogs.command_support import DualCommand, ModerationError, slash_name
 
 log = logging.getLogger(__name__)
 
@@ -19,12 +19,20 @@ def error_message(error, usage, *, now=None):
     original = error
     while hasattr(original, "original"):
         original = original.original
-    if isinstance(original, EconomyError):
+    if isinstance(original, (EconomyError, ModerationError)):
         return str(original)
     if isinstance(original, commands.NoPrivateMessage):
         return "Use esse comando em um servidor."
     if isinstance(original, commands.MissingPermissions):
-        return "Você precisa ser administrador para usar esse comando."
+        if original.missing_permissions == ["administrator"]:
+            return "Você precisa ser administrador para usar esse comando."
+        return "Você precisa das permissões: " + permission_names(original.missing_permissions) + "."
+    if isinstance(original, commands.BotMissingPermissions):
+        return "Preciso das permissões: " + permission_names(original.missing_permissions) + "."
+    if isinstance(original, nextcord.Forbidden):
+        return "O Discord recusou a ação. Verifique minhas permissões e a hierarquia dos cargos."
+    if isinstance(original, nextcord.NotFound):
+        return "O membro, canal ou mensagem não foi encontrado."
     if isinstance(original, commands.UserInputError):
         return f"Argumentos inválidos. Use: `{usage}`"
     if isinstance(original, commands.CommandOnCooldown):
@@ -36,13 +44,21 @@ def error_message(error, usage, *, now=None):
     return "Não foi possível concluir o comando. Tente novamente mais tarde."
 
 
+def permission_names(names):
+    labels = {"ban_members": "Banir Membros", "kick_members": "Expulsar Membros",
+              "moderate_members": "Moderar Membros", "manage_channels": "Gerenciar Canais",
+              "manage_roles": "Gerenciar Cargos", "manage_messages": "Gerenciar Mensagens",
+              "read_message_history": "Ler Histórico de Mensagens", "view_channel": "Ver Canal"}
+    return ", ".join(labels.get(name, name) for name in names)
+
+
 def create_bot():
     intents = nextcord.Intents.default()
     intents.members = True
     intents.message_content = True
     bot = commands.Bot(command_prefix="r.", intents=intents, help_command=None,
                        allowed_mentions=nextcord.AllowedMentions.none())
-    for extension in ("economy", "leaderboard", "games", "poker", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno"):
+    for extension in ("economy", "leaderboard", "games", "poker", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno", "moderation"):
         bot.load_extension(f"cogs.{extension}")
 
     @bot.event

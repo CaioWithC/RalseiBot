@@ -5,6 +5,10 @@ from nextcord.ext import commands
 from nextcord.ext.commands.view import StringView
 
 
+class ModerationError(commands.CheckFailure):
+    """An actionable moderation error safe to show to the moderator."""
+
+
 class InteractionContext(commands.Context):
     def __init__(self, bot, interaction, command, options, attachments=()):
         # Prefix checks, cooldowns and existing upload handlers expect a message.

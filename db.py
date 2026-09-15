@@ -199,6 +199,13 @@ class QuizRound(Base):
     winner_id = Column(String)
 
 
+class ChannelLock(Base):
+    __tablename__ = "channel_locks"
+    guild_id = Column(String, primary_key=True)
+    channel_id = Column(String, primary_key=True)
+    permissions = Column(String, nullable=False)
+
+
 class Database:
     def __init__(self, url):
         self.engine = create_engine(url, connect_args={"timeout": 10})
@@ -765,6 +772,22 @@ class Database:
                 record.log_message_id = str(log_message_id)
             if message_id is not None:
                 record.message_id = str(message_id)
+
+    def channel_lock(self, guild_id, channel_id):
+        with Session(self.engine) as session:
+            row = session.get(ChannelLock, (str(guild_id), str(channel_id)))
+            return json.loads(row.permissions) if row else None
+
+    def save_channel_lock(self, guild_id, channel_id, permissions):
+        with self.transaction() as session:
+            session.add(ChannelLock(guild_id=str(guild_id), channel_id=str(channel_id),
+                                    permissions=json.dumps(permissions)))
+
+    def delete_channel_lock(self, guild_id, channel_id):
+        with self.transaction() as session:
+            row = session.get(ChannelLock, (str(guild_id), str(channel_id)))
+            if row is not None:
+                session.delete(row)
 
     def configure_tickets(self, guild_id, category_id):
         with self.transaction() as session:

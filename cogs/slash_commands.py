@@ -24,6 +24,76 @@ class SlashCommands(commands.Cog):
     async def ping(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "ping")
 
+    @nextcord.slash_command(name="ban", description="Bane um membro, preservando suas mensagens.",
+                            contexts=GUILD_ONLY, default_member_permissions=nextcord.Permissions(ban_members=True))
+    async def ban(self, interaction: nextcord.Interaction,
+                  member: nextcord.Member = nextcord.SlashOption(description="Membro a banir."),
+                  reason: str = nextcord.SlashOption(description="Motivo (até 400 caracteres).", required=False)):
+        await self.invoke(interaction, "ban", member=member, reason=reason)
+
+    @nextcord.slash_command(name="unban", description="Remove um banimento pelo ID do usuário.",
+                            contexts=GUILD_ONLY, default_member_permissions=nextcord.Permissions(ban_members=True))
+    async def unban(self, interaction: nextcord.Interaction,
+                    user_id: str = nextcord.SlashOption(description="ID do usuário banido."),
+                    reason: str = nextcord.SlashOption(description="Motivo (até 400 caracteres).", required=False)):
+        await self.invoke(interaction, "unban", user_id=user_id, reason=reason)
+
+    @nextcord.slash_command(name="kick", description="Expulsa um membro do servidor.",
+                            contexts=GUILD_ONLY, default_member_permissions=nextcord.Permissions(kick_members=True))
+    async def kick(self, interaction: nextcord.Interaction,
+                   member: nextcord.Member = nextcord.SlashOption(description="Membro a expulsar."),
+                   reason: str = nextcord.SlashOption(description="Motivo (até 400 caracteres).", required=False)):
+        await self.invoke(interaction, "kick", member=member, reason=reason)
+
+    @nextcord.slash_command(name="mute", description="Silencia um membro com timeout por até 28 dias.",
+                            contexts=GUILD_ONLY, default_member_permissions=nextcord.Permissions(moderate_members=True))
+    async def mute(self, interaction: nextcord.Interaction,
+                   member: nextcord.Member = nextcord.SlashOption(description="Membro a silenciar."),
+                   duration: str = nextcord.SlashOption(description="Duração: 30s, 10m, 2h ou 7d; máximo 28d."),
+                   reason: str = nextcord.SlashOption(description="Motivo (até 400 caracteres).", required=False)):
+        await self.invoke(interaction, "mute", member=member, duration=duration, reason=reason)
+
+    @nextcord.slash_command(name="unmute", description="Remove o timeout de um membro.",
+                            contexts=GUILD_ONLY, default_member_permissions=nextcord.Permissions(moderate_members=True))
+    async def unmute(self, interaction: nextcord.Interaction,
+                     member: nextcord.Member = nextcord.SlashOption(description="Membro que voltará a falar."),
+                     reason: str = nextcord.SlashOption(description="Motivo (até 400 caracteres).", required=False)):
+        await self.invoke(interaction, "unmute", member=member, reason=reason)
+
+    @nextcord.slash_command(name="lock", description="Bloqueia mensagens e tópicos para @everyone no canal.",
+                            contexts=GUILD_ONLY,
+                            default_member_permissions=nextcord.Permissions(manage_channels=True, manage_roles=True))
+    async def lock(self, interaction: nextcord.Interaction,
+                   channel: nextcord.TextChannel = nextcord.SlashOption(
+                       description="Canal a bloquear (padrão: atual).", channel_types=[nextcord.ChannelType.text], required=False),
+                   reason: str = nextcord.SlashOption(description="Motivo (até 400 caracteres).", required=False)):
+        await self.invoke(interaction, "lock", channel=channel, reason=reason)
+
+    @nextcord.slash_command(name="unlock", description="Restaura as permissões salvas antes do lock.",
+                            contexts=GUILD_ONLY,
+                            default_member_permissions=nextcord.Permissions(manage_channels=True, manage_roles=True))
+    async def unlock(self, interaction: nextcord.Interaction,
+                     channel: nextcord.TextChannel = nextcord.SlashOption(
+                         description="Canal a desbloquear (padrão: atual).", channel_types=[nextcord.ChannelType.text], required=False),
+                     reason: str = nextcord.SlashOption(description="Motivo (até 400 caracteres).", required=False)):
+        await self.invoke(interaction, "unlock", channel=channel, reason=reason)
+
+    @nextcord.slash_command(name="clear", description="Exclui de 1 a 100 mensagens anteriores ao comando no canal atual.",
+                            contexts=GUILD_ONLY,
+                            default_member_permissions=nextcord.Permissions(manage_messages=True, read_message_history=True))
+    async def clear(self, interaction: nextcord.Interaction,
+                    amount: int = nextcord.SlashOption(description="Quantidade de mensagens a excluir.", min_value=1, max_value=100)):
+        await self.invoke(interaction, "clear", amount=amount)
+
+    @nextcord.slash_command(name="slowmode", description="Define o modo lento do canal; 0 desativa.",
+                            contexts=GUILD_ONLY, default_member_permissions=nextcord.Permissions(manage_channels=True))
+    async def slowmode(self, interaction: nextcord.Interaction,
+                       seconds: int = nextcord.SlashOption(description="Intervalo em segundos (0 desativa).", min_value=0, max_value=21600),
+                       channel: nextcord.TextChannel = nextcord.SlashOption(
+                           description="Canal a alterar (padrão: atual).", channel_types=[nextcord.ChannelType.text], required=False),
+                       reason: str = nextcord.SlashOption(description="Motivo (até 400 caracteres).", required=False)):
+        await self.invoke(interaction, "slowmode", seconds=seconds, channel=channel, reason=reason)
+
     @nextcord.slash_command(name="six", description="Uno em mesas públicas, com mãos privadas e regras configuráveis.",
                             contexts=GUILD_ONLY)
     async def six(self, interaction: nextcord.Interaction):
