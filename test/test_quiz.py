@@ -125,6 +125,21 @@ class QuizTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("answers", self.chat.send.call_args.kwargs["embed"].to_dict())
         self.assertTrue(1800 <= self.db.quiz_config(10)["next_at"] - self.now <= 3600)
 
+    async def test_selection_excludes_three_latest_questions_and_releases_oldest(self):
+        questions = [(f"Question {index}?", ["answer"]) for index in range(4)]
+        asked = []
+        with patch("cogs.quiz.SEED_QUESTIONS", questions), patch.object(
+                self.cog.rng, "choice", side_effect=lambda choices: choices[0]):
+            for _ in range(5):
+                self.now = self.db.quiz_config(10)["next_at"]
+                await self.activity()
+                await self.cog.tick_guild(10)
+                row = self.db.quiz_round(10)
+                self.assertNotIn(row["question"], asked[-3:])
+                asked.append(row["question"])
+                self.db.expire_quiz_round(row["id"], row["expires_at"])
+        self.assertEqual(asked, [question[0] for question in questions] + [questions[0][0]])
+
     async def test_bots_webhooks_commands_dms_and_other_channels_do_not_count_or_win(self):
         self.start_round()
         for message in (self.message("maçã", author=SimpleNamespace(bot=True)),
@@ -191,6 +206,7 @@ class QuizTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(nextcord.Forbidden):
             await self.cog.tick_guild(10)
         self.assertIsNone(self.db.quiz_round(10))
+        self.assertFalse(self.cog.recent_questions[10])
         self.assertGreater(self.db.quiz_config(10)["next_at"], self.now)
 
     async def test_active_round_and_schedule_survive_restart(self):

@@ -10,16 +10,20 @@ ROUND_SECONDS = 120
 DEFAULT_REWARD = 1000
 
 SEED_QUESTIONS = (
-    ("Quanto é 7 × 8?", ["56"]),
-    ("Quanto é 144 dividido por 12?", ["12"]),
-    ("Qual é a raiz quadrada de 81?", ["9"]),
-    ("Quem é o criador da teoria do gato na caixa?", ["Erwin Schrödinger", "Schrödinger", "Schrodinger"]),
-    ("Complete a sequência: 2, 4, 8, 16, …", ["32"]),
-    ("Quanto é 15% de 200?", ["30"]),
-    ("Quantos minutos há em duas horas e meia?", ["150"]),
-    ("Qual é o país onde vivemos?", ["Brasil"]),
-    ("Quem é o meu criador?", ["Caio"]),
-    ("Qual é o resultado de (3 + 5) × 2?", ["16"]),
+    ("Qual é a capital da França?", ["Paris"]),
+    ("Qual planeta é conhecido como Planeta Vermelho?", ["Marte"]),
+    ("Quantos lados possui um hexágono?", ["6", "seis"]),
+    ("Quem pintou a Mona Lisa?", ["Leonardo da Vinci", "Da Vinci"]),
+    ("Qual é o menor país do mundo em termos de área?", ["Vaticano", "Cidade do Vaticano"]),
+    ("Qual é o pais que tem a Pista de Monza?", ["Itália", "Italia"]),
+    ("Qual cantor brasileiro é conhecido como Homem com H", ["Ney Matogrosso"]),
+    ("Qual é o maior oceano do mundo?", ["Oceano Pacífico", "Pacífico", "Pacifico"]),
+    ("Fale um continente qualquer:", ["África", "Ásia", "América do Norte", "América do Sul", "Antártida", "Europa", "Oceania"]),
+    ("Em que continente fica o Egito?", ["África", "Africa"]),
+    ("Qual é o símbolo químico da água?", ["H2O", "H₂O"]),
+    ("Qual é o maior rio do mundo?", ["Nilo", "Nilo River"]),
+    ("Quantos dias possui um ano comum?", ["365"]),
+    ("Qual é o idioma oficial da China?", ["Mandarim"]),
     ("Quanto é 20 + 20 + 20 + 7?", ["67", "Six-Seven", "six seven"])
 )
 

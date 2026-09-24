@@ -132,7 +132,7 @@ class Quiz(commands.Cog):
         self.rng = rng or random.SystemRandom()
         self.activity = defaultdict(lambda: deque(maxlen=1000))
         self.locks = {}
-        self.last_question = {}
+        self.recent_questions = defaultdict(lambda: deque(maxlen=3))
         self.panel_view = self.review_view = None
 
     def lock_for(self, guild_id):
@@ -235,8 +235,10 @@ class Quiz(commands.Cog):
             if len(recent) < MIN_MESSAGES or len({user_id for _, user_id in recent}) < MIN_PARTICIPANTS:
                 return
             questions = [*SEED_QUESTIONS, *self.storage.approved_quiz_questions(guild_id)]
-            choices = [question for question in questions if question[0] != self.last_question.get(guild_id)]
-            question, answers = self.rng.choice(choices or questions)
+            choices = [question for question in questions if question[0] not in self.recent_questions[guild_id]]
+            if not choices:
+                return
+            question, answers = self.rng.choice(choices)
             row = self.storage.prepare_quiz_round(guild_id, question, answers, now,
                 int(now) + ROUND_SECONDS, self.next_time(now))
             if row is None:
@@ -252,7 +254,7 @@ class Quiz(commands.Cog):
             except Exception:
                 self.storage.cancel_quiz_round(row["id"])
                 raise
-            self.last_question[guild_id] = question
+            self.recent_questions[guild_id].append(question)
             recent.clear()
 
     async def send_panel(self, ctx):
