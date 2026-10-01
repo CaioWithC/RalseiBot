@@ -97,6 +97,19 @@ class RelationshipStorageTests(unittest.TestCase):
                 method(1, "1")
         self.assertIsNone(self.db.marriage(1))
 
+    def test_divorce_removes_marriage_and_affinity_and_allows_remarriage(self):
+        self.db.marry(1, 2)
+        self.db.add_marriage_affinity(1, 2, 3)
+        record = self.db.divorce(2)
+        self.assertEqual(record, {"first_id": "1", "second_id": "2"})
+        self.assertIsNone(self.db.marriage(1))
+        self.assertIsNone(self.db.marriage(2))
+        self.assertEqual(self.db.marry(1, 2)["affinity"], 0)
+
+    def test_divorce_requires_an_existing_marriage(self):
+        with self.assertRaises(EconomyError):
+            self.db.divorce(1)
+
 
 class ProposalTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -191,6 +204,18 @@ class ProposalTests(unittest.IsolatedAsyncioTestCase):
         self.ctx.author = SimpleNamespace(id=3, bot=False)
         with self.assertRaises(EconomyError):
             await self.cog.marry.callback(self.cog, self.ctx, self.second)
+
+    async def test_divorce_command_ends_the_author_marriage(self):
+        self.db.marry(1, 2)
+        await self.cog.divorce.callback(self.cog, self.ctx)
+        self.assertIsNone(self.db.marriage(1))
+        self.assertIsNone(self.db.marriage(2))
+        self.ctx.send.assert_awaited_once_with("💔 <@1> encerrou o casamento com <@2>.")
+
+    async def test_divorce_command_rejects_unmarried_author(self):
+        with self.assertRaises(EconomyError):
+            await self.cog.divorce.callback(self.cog, self.ctx)
+        self.ctx.send.assert_not_awaited()
         await view.on_timeout()
         self.db.marry(1, 2)
         with self.assertRaises(EconomyError):

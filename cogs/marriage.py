@@ -259,6 +259,15 @@ class Relationships(commands.Cog):
             embed = marriage_embed(record)
         await ctx.send(embed=embed)
 
+    @commands.command(cls=DualCommand, aliases=["divorciar"],
+                      help="Encerre seu casamento atual: r.divorce.")
+    @commands.guild_only()
+    @commands.cooldown(1, 10, lambda message: message.author.id)
+    async def divorce(self, ctx):
+        record = self.storage.divorce(ctx.author.id)
+        partner_id = record["second_id"] if record["first_id"] == str(ctx.author.id) else record["first_id"]
+        await ctx.send(f"💔 <@{ctx.author.id}> encerrou o casamento com <@{partner_id}>.")
+
 
 def setup(bot):
     bot.add_cog(Relationships(bot))

@@ -717,6 +717,19 @@ class Database:
             return {"first_id": marriage.first_id, "second_id": marriage.second_id,
                     "married_at": marriage.married_at, "affinity": affinity.points if affinity else 0}
 
+    def divorce(self, discord_id):
+        with self.transaction() as session:
+            marriage = session.scalar(select(Marriage).where(or_(
+                Marriage.first_id == str(discord_id), Marriage.second_id == str(discord_id))))
+            if marriage is None:
+                raise EconomyError("Você não tem um casamento registrado para encerrar.")
+            record = {"first_id": marriage.first_id, "second_id": marriage.second_id}
+            affinity = session.get(MarriageAffinity, marriage.id)
+            if affinity is not None:
+                session.delete(affinity)
+            session.delete(marriage)
+            return record
+
     def add_marriage_affinity(self, first_id, second_id, points):
         """Award points atomically only when these two people are married."""
         if type(points) is not int or not 1 <= points <= 3:
