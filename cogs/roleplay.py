@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import random
+import typing
 
 import nextcord
 from nextcord.ext import commands
@@ -111,23 +112,20 @@ class Roleplay(commands.Cog):
 
     @commands.command(cls=DualCommand, aliases=["beijar"],
                       help="Beije alguém com um GIF: r.kiss @membro.")
-    @commands.guild_only()
     @commands.cooldown(1, 5, lambda message: message.author.id)
-    async def kiss(self, ctx, member: nextcord.Member):
+    async def kiss(self, ctx, member: typing.Union[nextcord.Member, nextcord.User]):
         await self.interact(ctx, member, "kiss")
 
     @commands.command(cls=DualCommand, aliases=["abracar"],
                       help="Abrace alguém com um GIF: r.hug @membro.")
-    @commands.guild_only()
     @commands.cooldown(1, 5, lambda message: message.author.id)
-    async def hug(self, ctx, member: nextcord.Member):
+    async def hug(self, ctx, member: typing.Union[nextcord.Member, nextcord.User]):
         await self.interact(ctx, member, "hug")
 
     @commands.command(cls=DualCommand, aliases=["carinho"],
                       help="Faça carinho em alguém com um GIF: r.pat @membro.")
-    @commands.guild_only()
     @commands.cooldown(1, 5, lambda message: message.author.id)
-    async def pat(self, ctx, member: nextcord.Member):
+    async def pat(self, ctx, member: typing.Union[nextcord.Member, nextcord.User]):
         await self.interact(ctx, member, "pat")
 
 

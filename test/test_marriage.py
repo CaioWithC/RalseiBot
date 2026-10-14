@@ -204,6 +204,10 @@ class ProposalTests(unittest.IsolatedAsyncioTestCase):
         self.ctx.author = SimpleNamespace(id=3, bot=False)
         with self.assertRaises(EconomyError):
             await self.cog.marry.callback(self.cog, self.ctx, self.second)
+        await view.on_timeout()
+        self.db.marry(1, 2)
+        with self.assertRaises(EconomyError):
+            await self.cog.marry.callback(self.cog, self.ctx, self.second)
 
     async def test_divorce_command_ends_the_author_marriage(self):
         self.db.marry(1, 2)
@@ -216,10 +220,6 @@ class ProposalTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(EconomyError):
             await self.cog.divorce.callback(self.cog, self.ctx)
         self.ctx.send.assert_not_awaited()
-        await view.on_timeout()
-        self.db.marry(1, 2)
-        with self.assertRaises(EconomyError):
-            await self.cog.marry.callback(self.cog, self.ctx, self.second)
 
     async def test_second_confirmation_rechecks_database_for_conflicting_marriage(self):
         view = await self.proposal()

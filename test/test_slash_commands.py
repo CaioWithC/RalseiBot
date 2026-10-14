@@ -132,10 +132,10 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.invoke(ctx)
         self.assertFalse(ctx.command_failed)
         statuses, _ = self.db.mission_status(self.author.id)
-        self.assertEqual([item["progress"] for item in statuses], [1, 1, 1])
+        self.assertEqual([item["progress"] for item in statuses], [1, 1, 1, 0])
         balance = self.db.balance(self.author.id)
         viewed = await self.slash("missions")
-        self.assertEqual(len(viewed.sent[-1]["embed"].fields), 3)
+        self.assertEqual(len(viewed.sent[-1]["embed"].fields), 4)
         ctx = await self.prefix_context("r.missoes claim")
         await self.bot.invoke(ctx)
         self.assertIn("7,500", ctx.send.call_args.args[0])
@@ -177,6 +177,24 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(embed.thumbnail.url, "https://example.com/cover.jpg")
         self.assertIn("spotify-track-id", embed.description)
 
+    async def test_admmusica_slash_command_changes_song_and_sends_embed(self):
+        self.author.guild_permissions.administrator = True
+        with patch("cogs.music.load_playlist", return_value=[{
+            "title": "Track",
+            "artist": "The Artist",
+            "album": "Album",
+            "spotify_id": "spotify-track-id",
+        }]), patch(
+            "cogs.music.Music.lookup_album_art",
+            new=AsyncMock(return_value="https://example.com/cover.jpg"),
+        ):
+            result = await self.slash("admmusica", member=self.member)
+
+        embed = result.sent[-1]["embed"]
+        self.assertEqual(embed.title, "🎵 Música do dia alterada")
+        self.assertEqual(embed.thumbnail.url, "https://example.com/cover.jpg")
+        self.assertIn(self.member.mention, embed.description)
+
     async def test_poker_slash_and_prefix_use_same_buyin_and_avatar(self):
         self.bot._connection.user.display_avatar = self.author.display_avatar
         interaction = await self.slash("poker", amount="1k")
@@ -212,8 +230,11 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             for alias in command.aliases:
                 prefix = f"{command.parent.qualified_name} " if command.parent else ""
                 self.assertIs(self.bot.get_command(prefix + alias), command)
-        for name in ("pay", "work", "addbalance", "setbalance", "resetbalance", "activity", "close", "confess", "quiz", "quizpanel", "quizoff"):
+        for name in ("addbalance", "setbalance", "resetbalance", "activity", "close", "confess", "quiz", "quizpanel", "quizoff"):
             self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0])
+        for name in ("pay", "work", "ping", "help", "balance", "daily", "musica", "missions", "freelance", "rob", "rich", "slots", "poker", "blackjack", "mines", "marry", "ship", "marriage", "divorce", "profile"):
+            self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0, 1, 2])
+            self.assertEqual(self.apps[name].get_payload(None)["integration_types"], [0, 1])
         for name in ("addbalance", "setbalance", "resetbalance", "activity", "confess", "quiz", "quizpanel", "quizoff"):
             self.assertEqual(self.apps[name].get_payload(None)["default_member_permissions"], "8")
         for name in ("pay", "setbalance", "addbalance", "slots", "blackjack", "mines"):
@@ -225,7 +246,8 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         from cogs.roleplay import GIFS
         self.db.marry(self.author.id, self.member.id)
         for name, alias in (("kiss", "beijar"), ("hug", "abracar"), ("pat", "carinho")):
-            self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0])
+            self.assertEqual(self.apps[name].get_payload(None)["contexts"], [0, 1, 2])
+            self.assertEqual(self.apps[name].get_payload(None)["integration_types"], [0, 1])
             result = await self.slash(name, member=self.member)
             first_gif = result.sent[0]["embed"].image.url
             self.assertIn(first_gif, GIFS[name])
@@ -242,7 +264,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             result = await self.slash(name, member=self.member)
             self.assertIn("Aguarde", result.sent[0]["content"])
             result = await self.slash(name, member=self.member, guild=False)
-            self.assertIn("servidor", result.sent[0]["content"])
+            self.assertIn("Aguarde", result.sent[0]["content"])
         self.assertTrue(6 <= self.db.marriage(self.author.id)["affinity"] <= 18)
 
     async def test_reciprocate_swaps_participants_rotates_gif_and_prevents_duplicate_clicks(self):
@@ -309,7 +331,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_ping_balance_daily_and_work_use_existing_handlers(self):
         self.assertEqual((await self.slash("ping")).sent[0]["content"], "Pong!")
-        self.assertIn("10,000", (await self.slash("balance")).sent[0]["content"])
+        balance_msg = (await self.slash("balance")).sent[0]
+        balance_text = balance_msg.get("content") or balance_msg["embed"].description
+        self.assertIn("10,000", balance_text)
         with patch("cogs.economy.random.randint", return_value=5000):
             await self.slash("daily")
             await self.slash("work")
@@ -344,7 +368,9 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_prefix_proposal_alias_and_slash_guild_self_bot_restrictions(self):
         result = await self.slash("marry", guild=False, member=self.member)
-        self.assertIn("servidor", result.sent[0]["content"])
+        self.assertIn("Pedido de casamento", result.sent[0]["embed"].title)
+        result.sent[0]["view"].finish("cancel")
+        self.seconds += 11
         result = await self.slash("marry", member=self.author)
         self.assertIn("si mesmo", result.sent[0]["content"])
         self.seconds += 11
@@ -362,7 +388,8 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(view.confirmed, set())
         result = await self.slash("marriage")
         self.assertIn("Não há casamento", result.sent[0]["embed"].description)
-        self.assertEqual(self.apps["marry"].get_payload(None)["contexts"], [0])
+        self.assertEqual(self.apps["marry"].get_payload(None)["contexts"], [0, 1, 2])
+        self.assertEqual(self.apps["marry"].get_payload(None)["integration_types"], [0, 1])
 
     async def test_ship_single_target_explicit_pair_and_prefix_alias_keep_same_score(self):
         with patch("db.secrets.randbelow", return_value=87) as random:
@@ -427,7 +454,8 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             ctx = await self.prefix_context("r.daily")
             await self.bot.invoke(ctx)
             await asyncio.sleep(0)
-            self.assertIn("recebeu", ctx.send.call_args.args[0])
+            daily_text = ctx.send.call_args.args[0] if ctx.send.call_args.args else ctx.send.call_args.kwargs["embed"].description
+            self.assertIn("recebeu", daily_text)
             result = await self.slash("daily")
             self.assertIn(f"<t:{midnight + 86400}:R>", result.sent[0]["content"])
             self.assertIn("00:00 GMT-3", result.sent[0]["content"])
@@ -467,7 +495,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
             result = await self.slash(name, guild=False, **values)
             self.assertIn("servidor", result.sent[0]["content"])
             self.assertEqual(self.db.balance(self.member.id), 0)
-        for name, options in (("work", {}), ("pay", {"member": self.member, "amount": "100"})):
+        for name, options in (("activity", {"text": "teste"}), ("sync", {})):
             result = await self.slash(name, guild=False, **options)
             self.assertIn("servidor", result.sent[0]["content"])
         self.assertEqual(self.db.balance(self.author.id), 10_000)
@@ -845,6 +873,31 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         with self.assertLogs("main", level="ERROR"):
             await self.bot.on_application_command_error(interaction, RuntimeError("option failure"))
         interaction.response.send_message.assert_awaited_once()
+
+    async def test_user_installed_and_dm_commands_execute_without_guild(self):
+        # Slash commands installed for users or run in DMs have guild=None
+        ping_res = await self.slash("ping", guild=False)
+        self.assertEqual(ping_res.sent[0]["content"], "Pong!")
+
+        bal_res = await self.slash("balance", guild=False)
+        self.assertIn("Saldo atual", bal_res.sent[0]["embed"].title)
+
+        work_res = await self.slash("work", guild=False)
+        self.assertIn("Trabalho concluído", work_res.sent[0]["embed"].title)
+
+        self.seconds += 7200
+        free_res = await self.slash("freelance", guild=False)
+        self.assertIn("Freelance concluído", free_res.sent[0]["embed"].title)
+
+        slots_res = await self.slash("slots", amount="100", guild=False)
+        self.assertIn("Caça-níqueis", slots_res.sent[0]["embed"].title)
+
+        kiss_res = await self.slash("kiss", member=self.member, guild=False)
+        self.assertIn("beijou", kiss_res.sent[0]["embed"].description)
+
+        # Ban is guild-only and should not run in DMs
+        ban_res = await self.slash("ban", member=self.member, guild=False)
+        self.assertIn("servidor", ban_res.sent[0]["content"])
 
 
 if __name__ == "__main__":

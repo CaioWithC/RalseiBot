@@ -1,11 +1,14 @@
 import asyncio
 import csv
 import hashlib
+import json
 import logging
 import os
+import random
 import re
 import ssl
 import time
+import typing
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -24,6 +27,7 @@ except Exception:
 
 log = logging.getLogger(__name__)
 PLAYLIST_PATH = Path(__file__).resolve().parent.parent / "assets" / "playlist.csv"
+OVERRIDES_PATH = Path(__file__).resolve().parent.parent / "assets" / "music_overrides.json"
 MUSICBRAINZ_SEARCH_URL = "https://musicbrainz.org/ws/2/release-group/"
 COVER_ART_URL = "https://coverartarchive.org/release-group/{mbid}"
 USER_AGENT = "RalseiBot/1.0 (https://github.com/CaioWithC/RalseiBot)"
@@ -127,13 +131,60 @@ def front_cover_url(cover_art):
 
 
 class Music(commands.Cog):
-    def __init__(self, bot, *, clock=time.monotonic, sleep=asyncio.sleep):
+    def __init__(self, bot, *, clock=time.monotonic, sleep=asyncio.sleep, overrides_path=None):
         self.bot = bot
         self.clock = clock
         self.sleep = sleep
         self._musicbrainz_lock = asyncio.Lock()
         self._last_musicbrainz_request = float("-inf")
         self._cover_cache = {}
+        self._overrides_path = Path(overrides_path) if overrides_path else OVERRIDES_PATH
+        self._song_overrides = {}
+        self._load_overrides()
+
+    def _load_overrides(self):
+        try:
+            if self._overrides_path and self._overrides_path.exists():
+                with open(self._overrides_path, "r", encoding="utf-8") as f:
+                    self._song_overrides = json.load(f)
+        except Exception as error:
+            log.warning("Could not load music overrides: %s", error)
+            self._song_overrides = {}
+
+    def _save_overrides(self):
+        if not self._overrides_path:
+            return
+        try:
+            self._overrides_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._overrides_path, "w", encoding="utf-8") as f:
+                json.dump(self._song_overrides, f, indent=2)
+        except Exception as error:
+            log.warning("Could not save music overrides: %s", error)
+
+    def get_user_song(self, user_id, songs, today=None):
+        if today is None:
+            today = datetime.now(DAILY_TIMEZONE).date()
+        today_str = today.isoformat()
+        override = self._song_overrides.get(str(user_id))
+        if override and override.get("date") == today_str:
+            idx = override.get("index")
+            if isinstance(idx, int) and 0 <= idx < len(songs):
+                return songs[idx]
+        return songs[daily_song_index(user_id, len(songs), today)]
+
+    def set_user_song(self, user_id, song_index, today=None):
+        if today is None:
+            today = datetime.now(DAILY_TIMEZONE).date()
+        today_str = today.isoformat()
+        self._song_overrides = {
+            uid: data for uid, data in self._song_overrides.items()
+            if data.get("date") == today_str
+        }
+        self._song_overrides[str(user_id)] = {
+            "date": today_str,
+            "index": song_index,
+        }
+        self._save_overrides()
 
     async def _get_release_group(self, session, song):
         album = song["album"] or song["title"]
@@ -303,24 +354,13 @@ class Music(commands.Cog):
         self._cover_cache[cache_key] = artwork_url
         return artwork_url
 
-    @commands.command(
-        cls=DualCommand,
-        name="musica",
-        aliases=["music", "song", "musica-do-dia"],
-        help="Receba sua música do dia, escolhida da playlist e com a capa do álbum.",
-    )
-    async def musica(self, ctx):
-        songs = load_playlist()
-        song = songs[daily_song_index(ctx.author.id, len(songs))]
+    async def _send_song_embed(self, ctx, song, *, title, description):
         try:
             artwork_url = await self.lookup_album_art(song)
         except Exception:
             log.warning("Falha ao buscar capa do álbum para %s", song["title"], exc_info=True)
             artwork_url = None
 
-        description = (
-            f"{ctx.author.mention}, sua recomendação de hoje é **{song['title']}**."
-        )
         view = None
         if song["spotify_id"]:
             spotify_url = f"https://open.spotify.com/track/{song['spotify_id']}"
@@ -331,7 +371,7 @@ class Music(commands.Cog):
             )
 
         embed = nextcord.Embed(
-            title="🎵 Música do dia",
+            title=title,
             description=description,
             color=0x77E5BC,
         )
@@ -346,6 +386,90 @@ class Music(commands.Cog):
             kwargs["view"] = view
         await ctx.send(**kwargs)
 
+    @commands.command(
+        cls=DualCommand,
+        name="musica",
+        aliases=["music", "song", "musica-do-dia"],
+        help="Receba sua música do dia, escolhida da playlist e com a capa do álbum.",
+    )
+    async def musica(self, ctx):
+        songs = load_playlist()
+        song = self.get_user_song(ctx.author.id, songs)
+        description = (
+            f"{ctx.author.mention}, sua recomendação de hoje é **{song['title']}**."
+        )
+        await self._send_song_embed(
+            ctx,
+            song,
+            title="🎵 Música do dia",
+            description=description,
+        )
+
+    @commands.command(
+        cls=DualCommand,
+        name="admmusica",
+        aliases=["setmusica", "trocarmusica", "trocamusica"],
+        help="Administrador: troca a música do dia de uma pessoa (marcando-a) ou a sua própria: r.admmusica [@membro] [música].",
+    )
+    @commands.has_permissions(administrator=True)
+    async def admmusica(
+        self,
+        ctx,
+        member: typing.Optional[nextcord.Member] = None,
+        *,
+        musica: str = None,
+    ):
+        target = member or ctx.author
+        if getattr(target, "bot", False):
+            raise EconomyError("Bots não têm recomendação diária de música.")
+
+        songs = load_playlist()
+        current_song = self.get_user_song(target.id, songs)
+
+        if musica:
+            query = _normalized(musica)
+            matches = [
+                (i, s) for i, s in enumerate(songs)
+                if query in _normalized(s["title"])
+                or query in _normalized(s["artist"])
+                or query in _normalized(s["album"])
+            ]
+            if not matches:
+                raise EconomyError(
+                    f"Não encontrei nenhuma música na playlist correspondente a '{musica}'."
+                )
+            exact = [
+                (i, s) for i, s in matches
+                if _normalized(s["title"]) == query or _normalized(s["album"]) == query
+            ]
+            new_index, song = exact[0] if exact else matches[0]
+        else:
+            candidates = [
+                (i, s) for i, s in enumerate(songs)
+                if _normalized(s["title"]) != _normalized(current_song["title"])
+                or _normalized(s["artist"]) != _normalized(current_song["artist"])
+            ]
+            if not candidates:
+                candidates = list(enumerate(songs))
+            new_index, song = random.choice(candidates)
+
+        self.set_user_song(target.id, new_index)
+
+        if target.id == ctx.author.id:
+            description = (
+                f"{ctx.author.mention}, sua música do dia foi alterada para **{song['title']}**."
+            )
+        else:
+            description = (
+                f"A música do dia de {target.mention} foi alterada para **{song['title']}** por {ctx.author.mention}."
+            )
+
+        await self._send_song_embed(
+            ctx,
+            song,
+            title="🎵 Música do dia alterada",
+            description=description,
+        )
 
 def setup(bot):
     bot.add_cog(Music(bot))

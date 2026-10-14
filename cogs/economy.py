@@ -1,6 +1,7 @@
-﻿import random
+import random
 import asyncio
 import logging
+import typing
 
 import nextcord
 from nextcord.ext import commands
@@ -119,7 +120,9 @@ class Economy(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-   
+    def money_embed(self, title: str, description: str, color: int = 0x77E5BC) -> nextcord.Embed:
+        return nextcord.Embed(title=title, description=description, color=color)
+
     @commands.command(cls=DualCommand, aliases=["saldo", "atm", "bal"], help="Mostra seu saldo em DarkMoney.")
     async def balance(self, ctx):
         embed = self.money_embed(
@@ -140,8 +143,7 @@ class Economy(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(cls=DualCommand, aliases=["transferir", "pix", "pagar"], help="Transfira DarkMoney com aceite das duas pessoas por botão: r.pay @membro valor (ex.: 100, 10K, 1.5M)")
-    @commands.guild_only()
-    async def pay(self, ctx, member: nextcord.Member, amount: CoinAmount):
+    async def pay(self, ctx, member: typing.Union[nextcord.Member, nextcord.User], amount: CoinAmount):
         if member.id == ctx.author.id:
             raise commands.BadArgument("Você não pode transferir para si mesmo.")
         if member.bot:
@@ -157,7 +159,6 @@ class Economy(commands.Cog):
             raise
 
     @commands.command(cls=DualCommand, help="Trabalhe para ganhar DarkMoney: r.work")
-    @commands.guild_only()
     @commands.cooldown(1, 7200, lambda message: message.author.id)
     async def work(self, ctx):
         reward = random.randint(10000, 40000)
@@ -170,7 +171,6 @@ class Economy(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(cls=DualCommand, aliases=["freelancer", "freelas", "frelas"], help="Faça um 'freelance' para ganhar DarkMoney: r.freelance")
-    @commands.guild_only()
     @commands.cooldown(1, 600, lambda message: message.author.id)
     async def freelance(self, ctx):
         reward = random.randint(100, 10000)
@@ -183,9 +183,8 @@ class Economy(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(cls=DualCommand, help="Roube DarkMoney de outro membro: r.rob @membro")
-    @commands.guild_only()
     @commands.cooldown(1, 3600, lambda message: message.author.id)
-    async def rob(self, ctx, member: nextcord.Member):
+    async def rob(self, ctx, member: typing.Union[nextcord.Member, nextcord.User]):
         if member.id == ctx.author.id:
             await ctx.send(embed=self.money_embed("⚠️ Roubo inválido", "Você não pode roubar de si mesmo."))
             return

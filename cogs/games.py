@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import uuid
 
 import nextcord
 from nextcord.ext import commands
@@ -141,7 +142,7 @@ class MineCountSelect(nextcord.ui.Select):
                 label=f"{count} bomba(s) • {float(multiplier):.2f}×",
                 value=str(count), emoji="💣",
                 description=f"1ª casa segura: {int(stake * multiplier):,} DarkMoney • {16 - count}/16 casas seguras"))
-        super().__init__(placeholder="Escolha de 1 a 15 bombas para começar", options=options)
+        super().__init__(custom_id=f"mines:bombs:{uuid.uuid4().hex}", placeholder="Escolha de 1 a 15 bombas para começar", options=options)
 
     async def callback(self, interaction):
         count = int(self.values[0])

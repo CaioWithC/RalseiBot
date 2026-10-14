@@ -121,6 +121,38 @@ class PaymentTests(unittest.IsolatedAsyncioTestCase):
         ctx.send.assert_not_awaited()
         self.balances()
 
+    async def test_money_embed_helper_builds_embed_with_correct_fields(self):
+        cog = Economy(None)
+        embed = cog.money_embed("Título", "Descrição")
+        self.assertEqual(embed.title, "Título")
+        self.assertEqual(embed.description, "Descrição")
+        self.assertEqual(embed.color.value, 0x77E5BC)
+
+        custom_embed = cog.money_embed("Título 2", "Descrição 2", color=0x123456)
+        self.assertEqual(custom_embed.color.value, 0x123456)
+
+    async def test_work_and_freelance_send_money_embed(self):
+        cog = Economy(None)
+        sender = SimpleNamespace(id=1, mention="<@1>", display_name="Sender", bot=False)
+        ctx = SimpleNamespace(author=sender, send=AsyncMock())
+
+        with patch("cogs.economy.database", self.db), patch("cogs.economy.random.randint", return_value=25000):
+            await Economy.work.callback(cog, ctx)
+        ctx.send.assert_awaited_once()
+        embed = ctx.send.call_args.kwargs["embed"]
+        self.assertEqual(embed.title, "💼 Trabalho concluído")
+        self.assertIn("25,000 D$", embed.description)
+        self.assertEqual(embed.color.value, 0x77E5BC)
+
+        ctx.send.reset_mock()
+        with patch("cogs.economy.database", self.db), patch("cogs.economy.random.randint", return_value=500):
+            await Economy.freelance.callback(cog, ctx)
+        ctx.send.assert_awaited_once()
+        embed = ctx.send.call_args.kwargs["embed"]
+        self.assertEqual(embed.title, "🧩 Freelance concluído")
+        self.assertIn("500 D$", embed.description)
+        self.assertEqual(embed.color.value, 0x77E5BC)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -144,6 +144,10 @@ class Activities(commands.Cog):
         name = ctx.command.qualified_name
         admin = one_line(ctx.author.display_name)[:40]
         command = f"/{slash_name(ctx.command)}" if getattr(ctx, "interaction", None) else f"r.{name}"
+        self.override = ActivityOverride(
+            status_text(f"👑 {admin} usou {command}!"),
+            now + ADMIN_REACTION_SECONDS,
+        )
 
     @commands.command(cls=DualCommand, aliases=["atividade", "status"],
                       help="Administrador: r.activity <texto de até 128 caracteres> por 5 minutos. Use reset para retomar a rotação.")

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 import logging
 import random
 import time
+import typing
 import uuid
 
 import nextcord
@@ -33,7 +34,7 @@ class Table:
     id: str
     host_id: int
     channel_id: int
-    guild_id: int
+    guild_id: typing.Optional[int]
     stake: int
     members: dict
     deadline: float
@@ -157,14 +158,13 @@ class Poker(commands.Cog):
         "Texas Hold’em com Ralsei como dealer: r.poker 1000 ou /poker amount:1000. "
         "Entrada mínima de 20 D$ (aceita K/M). Lobby para 1–6 pessoas; solo joga com 4 bots. "
         "Uma mão completa, cartas privadas e 60 segundos por vez. Fichas finais voltam ao saldo."))
-    @commands.guild_only()
     async def poker(self, ctx, amount: CoinAmount = 1000):
         self.storage.positive(amount)
         if amount < 20:
             raise EconomyError("A entrada mínima é de 20 D$.")
         if self.storage.balance(ctx.author.id) < amount:
             raise EconomyError("Você não tem saldo suficiente para essa entrada.")
-        table = Table(uuid.uuid4().hex, ctx.author.id, ctx.channel.id, ctx.guild.id,
+        table = Table(uuid.uuid4().hex, ctx.author.id, ctx.channel.id, ctx.guild.id if ctx.guild else None,
                       amount, {ctx.author.id: ctx.author.display_name}, self.clock() + LOBBY_SECONDS)
         async with self.registry_lock:
             if ctx.author.id in self.memberships:

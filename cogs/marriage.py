@@ -2,6 +2,7 @@
 import asyncio
 from io import BytesIO
 import logging
+import typing
 import warnings
 
 import nextcord
@@ -210,9 +211,8 @@ class Relationships(commands.Cog):
 
     @commands.command(cls=DualCommand, aliases=["casar", "propose"],
                       help="Peça alguém em casamento: r.marry @membro. As duas pessoas precisam confirmar nos botões.")
-    @commands.guild_only()
     @commands.cooldown(1, 10, lambda message: message.author.id)
-    async def marry(self, ctx, member: nextcord.Member):
+    async def marry(self, ctx, member: typing.Union[nextcord.Member, nextcord.User]):
         if ctx.author.id == member.id:
             raise EconomyError("Você não pode pedir a si mesmo em casamento.")
         if ctx.author.bot or member.bot:
@@ -261,7 +261,6 @@ class Relationships(commands.Cog):
 
     @commands.command(cls=DualCommand, aliases=["divorciar"],
                       help="Encerre seu casamento atual: r.divorce.")
-    @commands.guild_only()
     @commands.cooldown(1, 10, lambda message: message.author.id)
     async def divorce(self, ctx):
         record = self.storage.divorce(ctx.author.id)

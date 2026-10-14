@@ -266,7 +266,93 @@ class MusicRecommendationTests(unittest.IsolatedAsyncioTestCase):
         img_url = await cog.search_google_image(FakeSession(), "Album", "The Artist")
         self.assertEqual(img_url, "https://example.com/art.jpg")
 
+    async def test_admmusica_changes_author_song_when_no_member_specified(self):
+        ctx = SimpleNamespace(
+            author=SimpleNamespace(id=123, mention="<@123>", bot=False),
+            send=AsyncMock(),
+        )
+        cog = Music(None, overrides_path=None)
+        songs = [
+            {"title": "Track 1", "artist": "Artist 1", "album": "Album 1", "spotify_id": ""},
+            {"title": "Track 2", "artist": "Artist 2", "album": "Album 2", "spotify_id": ""},
+        ]
+        with (
+            patch("cogs.music.load_playlist", return_value=songs),
+            patch.object(cog, "lookup_album_art", new=AsyncMock(return_value=None)),
+        ):
+            await Music.admmusica.callback(cog, ctx, member=None)
+
+        ctx.send.assert_awaited_once()
+        embed = ctx.send.call_args.kwargs["embed"]
+        self.assertEqual(embed.title, "🎵 Música do dia alterada")
+        self.assertIn("sua música do dia foi alterada", embed.description)
+        new_song = cog.get_user_song(123, songs)
+        self.assertIn(new_song, songs)
+
+    async def test_admmusica_changes_mentioned_member_song(self):
+        author = SimpleNamespace(id=123, mention="<@123>", bot=False)
+        target = SimpleNamespace(id=456, mention="<@456>", bot=False)
+        ctx = SimpleNamespace(author=author, send=AsyncMock())
+        cog = Music(None, overrides_path=None)
+        songs = [
+            {"title": "Track A", "artist": "Artist A", "album": "Album A", "spotify_id": ""},
+            {"title": "Track B", "artist": "Artist B", "album": "Album B", "spotify_id": ""},
+        ]
+        with (
+            patch("cogs.music.load_playlist", return_value=songs),
+            patch.object(cog, "lookup_album_art", new=AsyncMock(return_value=None)),
+        ):
+            await Music.admmusica.callback(cog, ctx, member=target)
+
+        ctx.send.assert_awaited_once()
+        embed = ctx.send.call_args.kwargs["embed"]
+        self.assertEqual(embed.title, "🎵 Música do dia alterada")
+        self.assertIn("<@456>", embed.description)
+        self.assertIn("por <@123>", embed.description)
+        new_song = cog.get_user_song(456, songs)
+        self.assertIn(new_song, songs)
+
+    async def test_admmusica_sets_specific_song_by_name(self):
+        target = SimpleNamespace(id=456, mention="<@456>", bot=False)
+        ctx = SimpleNamespace(author=SimpleNamespace(id=123, mention="<@123>", bot=False), send=AsyncMock())
+        cog = Music(None, overrides_path=None)
+        songs = [
+            {"title": "Alpha", "artist": "Singer", "album": "First", "spotify_id": ""},
+            {"title": "Beta Special", "artist": "Singer", "album": "Second", "spotify_id": ""},
+        ]
+        with (
+            patch("cogs.music.load_playlist", return_value=songs),
+            patch.object(cog, "lookup_album_art", new=AsyncMock(return_value=None)),
+        ):
+            await Music.admmusica.callback(cog, ctx, member=target, musica="Beta Special")
+
+        new_song = cog.get_user_song(456, songs)
+        self.assertEqual(new_song["title"], "Beta Special")
+
+    async def test_admmusica_rejects_bots(self):
+        bot_target = SimpleNamespace(id=999, mention="<@999>", bot=True)
+        ctx = SimpleNamespace(author=SimpleNamespace(id=123, mention="<@123>", bot=False), send=AsyncMock())
+        cog = Music(None, overrides_path=None)
+        with patch("cogs.music.load_playlist", return_value=[{"title": "A", "artist": "B", "album": "C", "spotify_id": ""}]):
+            with self.assertRaises(EconomyError):
+                await Music.admmusica.callback(cog, ctx, member=bot_target)
+
+    def test_music_override_expires_on_next_day(self):
+        cog = Music(None, overrides_path=None)
+        songs = [
+            {"title": "Song 0", "artist": "A", "album": "X", "spotify_id": ""},
+            {"title": "Song 1", "artist": "B", "album": "Y", "spotify_id": ""},
+        ]
+        day1 = date(2026, 10, 13)
+        day2 = date(2026, 10, 14)
+        cog.set_user_song(123, 1, today=day1)
+        self.assertEqual(cog.get_user_song(123, songs, today=day1)["title"], "Song 1")
+        # On day2, override must expire and revert to day2 daily song
+        expected_default = songs[daily_song_index(123, len(songs), today=day2)]
+        self.assertEqual(cog.get_user_song(123, songs, today=day2), expected_default)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

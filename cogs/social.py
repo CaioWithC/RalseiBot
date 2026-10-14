@@ -1,8 +1,10 @@
 """Persistent user profiles rendered locally as PNG cards."""
 import asyncio
 from io import BytesIO
+from pathlib import Path
 import re
 import time
+import uuid
 import warnings
 
 import nextcord
@@ -19,6 +21,50 @@ MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_PIXELS = 16_000_000
 MAX_ABOUT_LENGTH = 300
 DEFAULT_COLOR = "#101C24"
+
+PETS_DIR = Path(__file__).resolve().parent.parent / "assets" / "profile_pet"
+
+PET_EMOJIS = {
+    "bamgeut": "🌰",
+    "choi yong meong": "🐶",
+    "da-go-nyang": "🐱",
+    "hhm nya ring": "🐧",
+    "hwang choon": "🦊",
+    "sakkukku": "🐱",
+    "kimachi": "🐆",
+    "heurimong": "👻",
+    "zuharong": "🐕",
+    "hongppippi": "🐣"
+}
+
+
+def get_available_pets():
+    """Discover all PNG pets available in assets/profile_pet."""
+    pets = {}
+    if not PETS_DIR.exists():
+        return pets
+    for path in sorted(PETS_DIR.rglob("*.png")):
+        rel_key = path.relative_to(PETS_DIR).as_posix()
+        stem = path.stem
+        version = " 2" if stem.endswith("_2") or stem.endswith("-2") else ""
+        raw = stem[:-2] if version else stem
+        if raw.isupper():
+            words = raw.replace("_", " ").split()
+            words = ["-".join(part.capitalize() for part in w.split("-")) for w in words]
+            base_name = " ".join(words)
+        else:
+            base_name = raw.replace("_", " ")
+        name = f"{base_name}{version}"
+        category = path.parent.name.upper() if path.parent != PETS_DIR else ""
+        emoji = PET_EMOJIS.get(base_name.lower(), "🐾")
+        pets[rel_key] = {
+            "key": rel_key,
+            "name": name,
+            "path": path,
+            "category": category,
+            "emoji": emoji,
+        }
+    return pets
 
 
 def parse_color(value):
@@ -163,25 +209,178 @@ def render_profile(profile, name, avatar=None, marriage=None):
         draw.text((WIDTH // 2, 365), "Seu espaço, seu estilo.", font=font(32, True), fill="#EBF7F3", anchor="mm")
         draw.text((WIDTH // 2, 414), "Envie uma imagem com r.profile background", font=font(20), fill="#A9CDC4", anchor="mm")
 
+    # Render pet if selected
+    pet_key = profile.get("pet")
+    pet_image = None
+    if pet_key:
+        pet_path = PETS_DIR / pet_key
+        if pet_path.is_file():
+            try:
+                with Image.open(pet_path) as pet_source:
+                    raw_pet = pet_source.convert("RGBA")
+                    bbox = raw_pet.getbbox()
+                    if bbox:
+                        raw_pet = raw_pet.crop(bbox)
+                    target_height = 175
+                    aspect = raw_pet.width / raw_pet.height
+                    target_width = int(target_height * aspect)
+                    if target_width > 220:
+                        target_width = 220
+                        target_height = int(target_width / aspect)
+                    pet_image = raw_pet.resize((target_width, target_height), Image.Resampling.LANCZOS)
+            except (OSError, ValueError):
+                pet_image = None
+
     draw.text((30, 614), "SOBRE MIM", font=font(23, True), fill=foreground)
     about = profile["about"] or "Conte um pouco sobre você com r.profile about <texto>."
+    max_bio_width = WIDTH - 60 - (pet_image.width + 30 if pet_image else 0)
     for size in range(24, 15, -1):
         face = font(size)
-        lines = wrap_text(draw, about, face, WIDTH - 60)
+        lines = wrap_text(draw, about, face, max_bio_width)
         max_lines = 124 // (size + 5)
         if len(lines) <= max_lines:
             break
     if len(lines) > max_lines:
         lines = lines[:max_lines]
-        while lines[-1] and draw.textlength(lines[-1] + "…", font=face) > WIDTH - 60:
+        while lines[-1] and draw.textlength(lines[-1] + "…", font=face) > max_bio_width:
             lines[-1] = lines[-1][:-1]
         lines[-1] += "…"
     for index, line in enumerate(lines):
         draw.text((30, 653 + index * (size + 5)), line, font=face, fill=foreground)
+
+    if pet_image:
+        pos_x = WIDTH - pet_image.width - 25
+        pos_y = HEIGHT - pet_image.height - 5
+        canvas.paste(pet_image, (pos_x, pos_y), mask=pet_image.getchannel("A"))
+
     output = BytesIO()
     canvas.save(output, format="PNG")
     output.seek(0)
     return output
+
+
+class ProfileView(nextcord.ui.View):
+    def __init__(self, cog, target, author_id, message=None):
+        super().__init__(timeout=180)
+        self.cog = cog
+        self.target = target
+        self.author_id = author_id
+        self.message = message
+
+    @nextcord.ui.button(label="Escolher Pet", emoji="🐾", style=nextcord.ButtonStyle.secondary, custom_id="profile:choose_pet")
+    async def choose_pet(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+        if interaction.user.id != self.target.id:
+            await interaction.response.send_message("Apenas o dono deste perfil pode escolher o pet!", ephemeral=True)
+            return
+
+        if self.message is None and interaction.message:
+            self.message = interaction.message
+
+        select_view = PetSelectView(self.cog, self.target, parent_view=self)
+        await interaction.response.send_message(
+            "🐾 **Escolha um pet para o seu perfil:**\nSelecione uma opção no menu abaixo:",
+            view=select_view,
+            ephemeral=True
+        )
+
+
+class PetSelectView(nextcord.ui.View):
+    def __init__(self, cog, target, parent_view=None):
+        super().__init__(timeout=120)
+        self.cog = cog
+        self.target = target
+        self.parent_view = parent_view
+        self.add_item(PetDropdown(cog, target, parent_view))
+
+
+class PetDropdown(nextcord.ui.Select):
+    def __init__(self, cog, target, parent_view=None):
+        self.cog = cog
+        self.target = target
+        self.parent_view = parent_view
+
+        pets = get_available_pets()
+        current_data = self.cog.storage.profile(target.id)
+        current_pet = current_data.get("pet")
+
+        options = [
+            nextcord.SelectOption(
+                label="Nenhum (Remover Pet)",
+                value="none",
+                description="Não exibir nenhum pet no perfil",
+                emoji="❌",
+                default=(current_pet is None)
+            )
+        ]
+
+        for key, pet in pets.items():
+            category_tag = f"[{pet['category']}] " if pet["category"] else ""
+            options.append(
+                nextcord.SelectOption(
+                    label=f"{category_tag}{pet['name']}"[:100],
+                    value=key,
+                    description=f"Coleção {pet['category']}"[:100] if pet["category"] else "Pet do perfil",
+                    emoji=pet["emoji"],
+                    default=(current_pet == key)
+                )
+            )
+
+        super().__init__(
+            custom_id=f"profile:pet:{uuid.uuid4().hex}",
+            placeholder="Selecione um pet para o seu perfil...",
+            min_values=1,
+            max_values=1,
+            options=options[:25]
+        )
+
+    async def callback(self, interaction: nextcord.Interaction):
+        if interaction.user.id != self.target.id:
+            await interaction.response.send_message("Apenas o dono deste perfil pode escolher o pet!", ephemeral=True)
+            return
+
+        selected_key = self.values[0]
+        new_pet = None if selected_key == "none" else selected_key
+        self.cog.storage.update_profile(self.target.id, pet=new_pet)
+
+        pets = get_available_pets()
+        pet_info = pets.get(new_pet) if new_pet else None
+        pet_name = pet_info["name"] if pet_info else "Nenhum"
+
+        # Update original profile message if possible
+        parent_msg = self.parent_view.message if self.parent_view else None
+        if parent_msg:
+            try:
+                target = self.target
+                data = self.cog.storage.profile(target.id)
+                marriage = self.cog.storage.marriage(target.id)
+                if marriage:
+                    spouse_id = int(marriage["second_id"] if str(target.id) == marriage["first_id"] else marriage["first_id"])
+                    spouse = self.cog.bot.get_user(spouse_id)
+                    if spouse is None:
+                        try:
+                            spouse = await asyncio.wait_for(self.cog.bot.fetch_user(spouse_id), timeout=5)
+                        except (nextcord.HTTPException, asyncio.TimeoutError):
+                            pass
+                    marriage["spouse_name"] = f"@{spouse.name}" if spouse else f"UID: {spouse_id}"
+
+                avatar = None
+                try:
+                    asset = target.display_avatar.with_size(256).with_static_format("png")
+                    avatar = await asyncio.wait_for(asset.read(), timeout=5)
+                except (nextcord.HTTPException, asyncio.TimeoutError, AttributeError):
+                    pass
+
+                output = await asyncio.to_thread(render_profile, data, target.display_name, avatar, marriage)
+                await parent_msg.edit(file=nextcord.File(output, filename="profile.png"), view=self.parent_view)
+            except Exception:
+                pass
+
+        if new_pet:
+            msg = f"🐾 Pet alterado para **{pet_name}** com sucesso!"
+        else:
+            msg = "🐾 Pet removido do seu perfil com sucesso."
+
+        await interaction.response.edit_message(content=msg, view=None)
 
 
 class Social(commands.Cog):
@@ -191,7 +390,7 @@ class Social(commands.Cog):
         self.image_jobs = asyncio.Semaphore(2)
 
     @commands.group(cls=DualGroup, name="profile", aliases=["perfil"], invoke_without_command=True,
-                    help="Veja seu perfil ou o de alguém: r.profile [@usuário]. Personalize com color, about e background.")
+                    help="Veja seu perfil ou o de alguém: r.profile [@usuário]. Personalize com color, about, background e pet.")
     @commands.cooldown(1, 5, lambda message: message.author.id)
     async def profile(self, ctx, member: nextcord.User = None):
         target = member or ctx.author
@@ -218,7 +417,10 @@ class Social(commands.Cog):
                 pass  # A failed avatar download still produces a usable profile.
             output = await asyncio.to_thread(render_profile, data, target.display_name, avatar, marriage)
         try:
-            await ctx.send(file=nextcord.File(output, filename="profile.png"))
+            view = ProfileView(self, target, ctx.author.id)
+            msg = await ctx.send(file=nextcord.File(output, filename="profile.png"), view=view)
+            if msg:
+                view.message = msg
         finally:
             output.close()
 
@@ -261,6 +463,45 @@ class Social(commands.Cog):
             background = await asyncio.to_thread(normalize_background, data)
         self.storage.update_profile(ctx.author.id, background=background)
         await ctx.send("Fundo personalizado salvo! Veja com `r.profile`.")
+
+    @profile.command(cls=DualCommand, name="pet", aliases=["animal", "bicho"],
+                     help="Escolha ou remova o pet do seu perfil: r.profile pet [nome ou reset]")
+    async def pet(self, ctx, *, name: str = None):
+        pets = get_available_pets()
+        if not name:
+            target = ctx.author
+            if ctx.guild:
+                target = ctx.guild.get_member(target.id) or target
+            data = self.storage.profile(target.id)
+            current_pet = data.get("pet")
+            current_name = pets[current_pet]["name"] if current_pet in pets else "Nenhum"
+            view = PetSelectView(self, target)
+            await ctx.send(f"Seu pet atual: **{current_name}**.\nSelecione um novo pet abaixo:", view=view)
+            return
+
+        name = name.strip()
+        if name.lower() in {"reset", "remover", "none", "nenhum", "tirar"}:
+            self.storage.update_profile(ctx.author.id, pet=None)
+            await ctx.send("Pet removido do seu perfil. Veja com `r.profile`.")
+            return
+
+        match = None
+        for key, info in pets.items():
+            if name.lower() == key.lower() or name.lower() == info["name"].lower() or name.lower() == Path(key).stem.lower():
+                match = key
+                break
+        if not match:
+            for key, info in pets.items():
+                if name.lower() in info["name"].lower():
+                    match = key
+                    break
+        if not match:
+            pet_list = ", ".join(f"`{p['name']}`" for p in pets.values())
+            raise EconomyError(f"Pet não encontrado. Pets disponíveis: {pet_list}. Ou use `reset` para remover.")
+
+        self.storage.update_profile(ctx.author.id, pet=match)
+        pet_display = pets[match]["name"]
+        await ctx.send(f"Pet alterado para **{pet_display}**! Veja com `r.profile`.")
 
 
 def setup(bot):

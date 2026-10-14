@@ -17,7 +17,8 @@ from nextcord.ext import commands
 from db import Database, EconomyError
 from main import create_bot
 from cogs.social import (normalize_background, parse_color, render_profile,
-                    text_color, MAX_UPLOAD_BYTES, WIDTH, HEIGHT)
+                    text_color, MAX_UPLOAD_BYTES, WIDTH, HEIGHT,
+                    get_available_pets, ProfileView, PetSelectView, PetDropdown)
 
 
 def png(color="blue", size=(320, 240)):
@@ -54,6 +55,10 @@ class ProfileStorageTests(unittest.TestCase):
                 self.assertIsNone(db.profile(1)["background"])
                 self.assertEqual(db.profile(1)["color"], "#ABCDEF")
                 self.assertEqual(db.balance(1), 500)
+                db.update_profile(1, pet="txt/BAMGEUT.png")
+                self.assertEqual(db.profile(1)["pet"], "txt/BAMGEUT.png")
+                db.update_profile(1, pet=None)
+                self.assertIsNone(db.profile(1)["pet"])
             finally:
                 db.engine.dispose()
 
@@ -110,6 +115,21 @@ class ProfileImageTests(unittest.TestCase):
             with Image.open(output) as image:
                 self.assertEqual(image.format, "PNG")
                 image.verify()
+
+    def test_render_with_pet_and_missing_pet_fallback(self):
+        profile = {"discord_id": "123456789012345678", "balance": 1000,
+                   "rank": 1, "color": "#101C24", "about": "Bio com pet",
+                   "background": None, "pet": "txt/BAMGEUT.png"}
+        with render_profile(profile, "User") as output:
+            with Image.open(output) as img:
+                self.assertEqual(img.size, (WIDTH, HEIGHT))
+                self.assertEqual(img.format, "PNG")
+        # Missing pet key should not raise an error
+        profile["pet"] = "nonexistent/pet.png"
+        with render_profile(profile, "User") as output:
+            with Image.open(output) as img:
+                self.assertEqual(img.size, (WIDTH, HEIGHT))
+                self.assertEqual(img.format, "PNG")
 
 
 class SocialCommandTests(unittest.IsolatedAsyncioTestCase):
@@ -210,6 +230,96 @@ class SocialCommandTests(unittest.IsolatedAsyncioTestCase):
             await self.invoke("r.profile background", attachments=[attachment])
         self.assertIsInstance(caught.exception.original, EconomyError)
         self.assertIsNone(self.db.profile(self.author.id)["background"])
+
+    async def test_profile_command_attaches_profile_view_with_button(self):
+        ctx = await self.invoke("r.profile")
+        view = ctx.send.call_args.kwargs.get("view")
+        self.assertEqual(type(view).__name__, "ProfileView")
+        self.assertTrue(any(getattr(item, "label", None) == "Escolher Pet" for item in view.children))
+
+    async def test_pet_command_routes_selection_and_reset(self):
+        await self.invoke("r.profile pet bamgeut")
+        self.assertEqual(self.db.profile(self.author.id)["pet"], "txt/BAMGEUT.png")
+        await self.invoke("r.profile pet reset")
+        self.assertIsNone(self.db.profile(self.author.id)["pet"])
+
+    async def test_pet_command_without_args_sends_select_view(self):
+        ctx = await self.invoke("r.profile pet")
+        view = ctx.send.call_args.kwargs.get("view")
+        self.assertEqual(type(view).__name__, "PetSelectView")
+
+    async def test_pet_dropdown_updates_profile(self):
+        parent_view = ProfileView(self.cog, self.author, self.author.id)
+        parent_msg = AsyncMock()
+        parent_view.message = parent_msg
+
+        select_view = PetSelectView(self.cog, self.author, parent_view=parent_view)
+        dropdown = select_view.children[0]
+        self.assertEqual(type(dropdown).__name__, "PetDropdown")
+
+        # Test selection
+        interaction = SimpleNamespace(
+            user=self.author,
+            response=SimpleNamespace(
+                edit_message=AsyncMock(),
+                send_message=AsyncMock(),
+            )
+        )
+        dropdown._selected_values = ["txt/BAMGEUT.png"]
+        await dropdown.callback(interaction)
+        self.assertEqual(self.db.profile(self.author.id)["pet"], "txt/BAMGEUT.png")
+        interaction.response.edit_message.assert_awaited_once()
+        parent_msg.edit.assert_awaited_once()
+
+        # Test unauthorized interaction
+        stranger = user(999999999999999999)
+        unauth_interaction = SimpleNamespace(
+            user=stranger,
+            response=SimpleNamespace(
+                send_message=AsyncMock(),
+                edit_message=AsyncMock(),
+            )
+        )
+        dropdown._selected_values = ["none"]
+        await dropdown.callback(unauth_interaction)
+        self.assertEqual(self.db.profile(self.author.id)["pet"], "txt/BAMGEUT.png")
+        unauth_interaction.response.send_message.assert_awaited_once()
+
+    async def test_choose_pet_button_authorized_opens_select_view_with_custom_id(self):
+        parent_view = ProfileView(self.cog, self.author, self.author.id)
+        mock_msg = SimpleNamespace(id=111222)
+        interaction = SimpleNamespace(
+            user=self.author,
+            message=mock_msg,
+            response=SimpleNamespace(send_message=AsyncMock()),
+        )
+        button = next(item for item in parent_view.children if getattr(item, "label", None) == "Escolher Pet")
+        await button.callback(interaction)
+        interaction.response.send_message.assert_awaited_once()
+        kwargs = interaction.response.send_message.call_args.kwargs
+        self.assertTrue(kwargs.get("ephemeral"))
+        select_view = kwargs.get("view")
+        self.assertIsInstance(select_view, PetSelectView)
+        dropdown = select_view.children[0]
+        self.assertTrue(dropdown.custom_id and dropdown.custom_id is not ...)
+        components = select_view.to_components()
+        self.assertIn("custom_id", components[0]["components"][0])
+
+    async def test_choose_pet_button_unauthorized_is_rejected(self):
+        parent_view = ProfileView(self.cog, self.author, self.author.id)
+        stranger = user(999999999999999999)
+        interaction = SimpleNamespace(
+            user=stranger,
+            message=SimpleNamespace(id=111222),
+            response=SimpleNamespace(send_message=AsyncMock()),
+        )
+        button = next(item for item in parent_view.children if getattr(item, "label", None) == "Escolher Pet")
+        await button.callback(interaction)
+        interaction.response.send_message.assert_awaited_once()
+        kwargs = interaction.response.send_message.call_args.kwargs
+        self.assertTrue(kwargs.get("ephemeral"))
+        self.assertIn("Apenas o dono deste perfil", interaction.response.send_message.call_args.args[0])
+        self.assertIsNone(kwargs.get("view"))
 
 
 if __name__ == "__main__":

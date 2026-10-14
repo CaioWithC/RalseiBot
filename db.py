@@ -1,4 +1,4 @@
-﻿"""Transactional DarkMoney storage, compatible with the original users table."""
+"""Transactional DarkMoney storage, compatible with the original users table."""
 import os
 import json
 import secrets
@@ -111,6 +111,7 @@ class SocialProfile(Base):
     color = Column(String(7), nullable=False, default="#101C24")
     about = Column(String(300), nullable=False, default="")
     background = Column(LargeBinary, nullable=True)
+    pet = Column(String(100), nullable=True)
 
 
 class ShipScore(Base):
@@ -210,6 +211,16 @@ class Database:
     def __init__(self, url):
         self.engine = create_engine(url, connect_args={"timeout": 10})
         Base.metadata.create_all(self.engine)
+        self._ensure_schema()
+
+    def _ensure_schema(self):
+        try:
+            with self.engine.connect() as conn:
+                columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(social_profiles)").fetchall()]
+                if columns and "pet" not in columns:
+                    conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN pet VARCHAR(100)")
+        except Exception:
+            pass
 
     @contextmanager
     def transaction(self):
@@ -665,10 +676,11 @@ class Database:
                 and_(User.balance == user.balance, User.discord_id < user.discord_id),
             )))
             return {"discord_id": user.discord_id, "balance": user.balance, "rank": ahead + 1,
-                    "color": profile.color, "about": profile.about, "background": profile.background}
+                    "color": profile.color, "about": profile.about, "background": profile.background,
+                    "pet": getattr(profile, "pet", None)}
 
     def update_profile(self, discord_id, **changes):
-        if not changes or changes.keys() - {"color", "about", "background"}:
+        if not changes or changes.keys() - {"color", "about", "background", "pet"}:
             raise EconomyError("Campo de perfil inválido.")
         with self.transaction() as session:
             self.user(session, discord_id)

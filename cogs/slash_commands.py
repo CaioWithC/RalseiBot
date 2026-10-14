@@ -1,10 +1,21 @@
 """Discord slash options; all behavior lives in the matching prefix command."""
+import typing
+
 import nextcord
 from nextcord.ext import commands
 
 from cogs.command_support import InteractionContext
 from cogs.sendmessage import EmbedJSONModal
 
+ALL_CONTEXTS = [
+    nextcord.InteractionContextType.guild,
+    nextcord.InteractionContextType.bot_dm,
+    nextcord.InteractionContextType.private_channel,
+]
+ALL_INSTALLS = [
+    nextcord.IntegrationType.guild_install,
+    nextcord.IntegrationType.user_install,
+]
 GUILD_ONLY = [nextcord.InteractionContextType.guild]
 ADMIN = nextcord.Permissions(administrator=True)
 BET_DESCRIPTION = "Aposta: 100, 10k, 1.5m, half ou all (até seu saldo)."
@@ -20,7 +31,8 @@ class SlashCommands(commands.Cog):
         # Bot.invoke runs the original command's checks and shared cooldowns.
         await self.bot.invoke(ctx)
 
-    @nextcord.slash_command(name="ping", description="Verifica se o bot está online.")
+    @nextcord.slash_command(name="ping", description="Verifica se o bot está online.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def ping(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "ping")
 
@@ -105,7 +117,8 @@ class SlashCommands(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         await self.bot.invoke(ctx)
 
-    @nextcord.slash_command(name="help", description="Lista os comandos r. e /, ou mostra a ajuda de um comando.")
+    @nextcord.slash_command(name="help", description="Lista os comandos r. e /, ou mostra a ajuda de um comando.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def help(self, interaction: nextcord.Interaction,
                    command: str = nextcord.SlashOption(description="Ex.: mines, pay ou profile background.", required=False)):
         await self.invoke(interaction, "help", command=command)
@@ -170,55 +183,73 @@ class SlashCommands(commands.Cog):
     async def quizoff(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "quizoff")
 
-    @nextcord.slash_command(name="kiss", description="Beije alguém com um GIF.", contexts=GUILD_ONLY)
+    @nextcord.slash_command(name="kiss", description="Beije alguém com um GIF.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def kiss(self, interaction: nextcord.Interaction,
-                   member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá o beijo.")):
+                   member: typing.Union[nextcord.Member, nextcord.User] = nextcord.SlashOption(description="Membro que receberá o beijo.")):
         await self.invoke(interaction, "kiss", member=member)
 
-    @nextcord.slash_command(name="hug", description="Abrace alguém com um GIF.", contexts=GUILD_ONLY)
+    @nextcord.slash_command(name="hug", description="Abrace alguém com um GIF.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def hug(self, interaction: nextcord.Interaction,
-                  member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá o abraço.")):
+                  member: typing.Union[nextcord.Member, nextcord.User] = nextcord.SlashOption(description="Membro que receberá o abraço.")):
         await self.invoke(interaction, "hug", member=member)
 
-    @nextcord.slash_command(name="pat", description="Faça carinho em alguém com um GIF.", contexts=GUILD_ONLY)
+    @nextcord.slash_command(name="pat", description="Faça carinho em alguém com um GIF.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def pat(self, interaction: nextcord.Interaction,
-                  member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá o carinho.")):
+                  member: typing.Union[nextcord.Member, nextcord.User] = nextcord.SlashOption(description="Membro que receberá o carinho.")):
         await self.invoke(interaction, "pat", member=member)
 
-    @nextcord.slash_command(name="balance", description="Mostra seu saldo em DarkMoney.")
+    @nextcord.slash_command(name="balance", description="Mostra seu saldo em DarkMoney.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def balance(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "balance")
 
-    @nextcord.slash_command(name="daily", description="Receba sua recompensa diária em DarkMoney. Renova às 00:00 (GMT-3).")
+    @nextcord.slash_command(name="daily", description="Receba sua recompensa diária em DarkMoney. Renova às 00:00 (GMT-3).",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def daily(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "daily")
 
-    @nextcord.slash_command(name="musica", description="Receba sua música do dia com a capa do álbum.")
+    @nextcord.slash_command(name="musica", description="Receba sua música do dia com a capa do álbum.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def musica(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "musica")
 
-    @nextcord.slash_command(name="missions", description="Veja suas missões diárias ou resgate os bônus de DarkMoney.")
+    @nextcord.slash_command(name="admmusica", description="Administrador: troque a música do dia de um membro ou a sua.",
+                            contexts=GUILD_ONLY, default_member_permissions=ADMIN)
+    async def admmusica(self, interaction: nextcord.Interaction,
+                        member: nextcord.Member = nextcord.SlashOption(description="Membro cuja música será alterada (deixe em branco para a sua).", required=False),
+                        musica: str = nextcord.SlashOption(description="Música, álbum ou artista da playlist (deixe em branco para aleatória).", required=False)):
+        await self.invoke(interaction, "admmusica", member=member, musica=musica)
+
+    @nextcord.slash_command(name="missions", description="Veja suas missões diárias ou resgate os bônus de DarkMoney.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def missions(self, interaction: nextcord.Interaction,
                        action: str = nextcord.SlashOption(description="Ver progresso ou resgatar todos os bônus disponíveis.",
                                                           default="view", choices=["view", "claim"])):
         await self.invoke(interaction, "missions", action=action)
 
-    @nextcord.slash_command(name="work", description="Trabalhe para ganhar DarkMoney a cada 2 horas.", contexts=GUILD_ONLY)
+    @nextcord.slash_command(name="work", description="Trabalhe para ganhar DarkMoney a cada 2 horas.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def work(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "work")
 
-    @nextcord.slash_command(name="freelance", description="Faça um 'freelance' para ganhar DarkMoney a cada 10 minutos.", contexts=GUILD_ONLY)
+    @nextcord.slash_command(name="freelance", description="Faça um 'freelance' para ganhar DarkMoney a cada 10 minutos.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def freelance(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "freelance")
 
-    @nextcord.slash_command(name="rob", description="Roube DarkMoney de outro membro a cada 60 minutos.", contexts=GUILD_ONLY)
+    @nextcord.slash_command(name="rob", description="Roube DarkMoney de outro membro a cada 60 minutos.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def rob(self, interaction: nextcord.Interaction,
-    member: nextcord.Member = nextcord.SlashOption(description="Membro que será roubado.")):
+                  member: typing.Union[nextcord.Member, nextcord.User] = nextcord.SlashOption(description="Membro que será roubado.")):
         await self.invoke(interaction, "rob", member=member)
 
-    @nextcord.slash_command(name="pay", description="Transfira DarkMoney com aceite das duas pessoas por botão.", contexts=GUILD_ONLY)
+    @nextcord.slash_command(name="pay", description="Transfira DarkMoney com aceite das duas pessoas por botão.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def pay(self, interaction: nextcord.Interaction,
-                  member: nextcord.Member = nextcord.SlashOption(description="Membro que receberá as moedas."),
+                  member: typing.Union[nextcord.Member, nextcord.User] = nextcord.SlashOption(description="Membro que receberá as moedas."),
                   amount: str = nextcord.SlashOption(description="Quantidade de moedas. Ex.: 100, 10K ou 1.5M.")):
         await self.invoke(interaction, "pay", member=member, amount=amount)
 
@@ -249,52 +280,65 @@ class SlashCommands(commands.Cog):
                                                         min_length=1, max_length=128)):
         await self.invoke(interaction, "activity", text=text)
 
-    @nextcord.slash_command(name="rich", description="Ranking global em imagem, com 10 jogadores por página.")
+    @nextcord.slash_command(name="rich", description="Ranking global em imagem, com 10 jogadores por página.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def rich(self, interaction: nextcord.Interaction,
                    page: int = nextcord.SlashOption(description="Página do ranking.", default=1, min_value=1, max_value=1_000_000)):
         await self.invoke(interaction, "rich", page=page)
 
-    @nextcord.slash_command(name="slots", description="Gire três rolos e aposte DarkMoney.")
+    @nextcord.slash_command(name="slots", description="Gire três rolos e aposte DarkMoney.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def slots(self, interaction: nextcord.Interaction,
                     amount: str = nextcord.SlashOption(description=BET_DESCRIPTION)):
         await self.invoke(interaction, "slots", amount=amount)
 
     @nextcord.slash_command(name="poker", description="Texas Hold’em com Ralsei: aposte D$ com amigos ou 4 bots.",
-                            contexts=GUILD_ONLY)
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def poker(self, interaction: nextcord.Interaction,
                     amount: str = nextcord.SlashOption(description="Entrada por pessoa: mínimo 20 D$. Ex.: 1000, 10k, 1m.",
                                                        default="1000", required=False)):
         await self.invoke(interaction, "poker", amount=amount)
 
-    @nextcord.slash_command(name="blackjack", description="Jogue blackjack com botões e aposte DarkMoney.")
+    @nextcord.slash_command(name="blackjack", description="Jogue blackjack com botões e aposte DarkMoney.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def blackjack(self, interaction: nextcord.Interaction,
                         amount: str = nextcord.SlashOption(description=BET_DESCRIPTION)):
         await self.invoke(interaction, "blackjack", amount=amount)
 
-    @nextcord.slash_command(name="mines", description="Revele casas seguras e retire seus ganhos antes de encontrar uma mina.")
+    @nextcord.slash_command(name="mines", description="Revele casas seguras e retire seus ganhos antes de encontrar uma mina.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def mines(self, interaction: nextcord.Interaction,
                     amount: str = nextcord.SlashOption(description=BET_DESCRIPTION),
                     mine_count: int = nextcord.SlashOption(description="Quantidade de minas; omita para escolher no menu.",
                                                            required=False, min_value=1, max_value=15)):
         await self.invoke(interaction, "mines", amount=amount, mine_count=mine_count)
 
-    @nextcord.slash_command(name="marry", description="Peça alguém em casamento. As duas pessoas precisam confirmar nos botões.", contexts=GUILD_ONLY)
+    @nextcord.slash_command(name="marry", description="Peça alguém em casamento. As duas pessoas precisam confirmar nos botões.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def marry(self, interaction: nextcord.Interaction,
-                    member: nextcord.Member = nextcord.SlashOption(description="Pessoa que receberá o pedido de casamento.")):
+                    member: typing.Union[nextcord.Member, nextcord.User] = nextcord.SlashOption(description="Pessoa que receberá o pedido de casamento.")):
         await self.invoke(interaction, "marry", member=member)
 
-    @nextcord.slash_command(name="ship", description="Veja os avatares e a porcentagem de compatibilidade fixa de duas pessoas.")
+    @nextcord.slash_command(name="ship", description="Veja os avatares e a porcentagem de compatibilidade fixa de duas pessoas.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def ship(self, interaction: nextcord.Interaction,
                    first: nextcord.User = nextcord.SlashOption(description="Pessoa para shippar com você, ou a primeira pessoa do par."),
                    second: nextcord.User = nextcord.SlashOption(description="Segunda pessoa do par; omita para shippar você com a primeira.", required=False)):
         await self.invoke(interaction, "ship", first=first, second=second)
 
-    @nextcord.slash_command(name="marriage", description="Veja o casamento de alguém, a data e o tempo juntos.")
+    @nextcord.slash_command(name="marriage", description="Veja o casamento de alguém, a data e o tempo juntos.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def marriage(self, interaction: nextcord.Interaction,
                        member: nextcord.User = nextcord.SlashOption(description="Usuário a consultar; omita para ver seu próprio casamento.", required=False)):
         await self.invoke(interaction, "marriage", member=member)
 
-    @nextcord.slash_command(name="profile", description="Veja e personalize seu perfil.")
+    @nextcord.slash_command(name="divorce", description="Encerre seu casamento atual.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def divorce(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "divorce")
+
+    @nextcord.slash_command(name="profile", description="Veja e personalize seu perfil.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def profile(self, interaction: nextcord.Interaction):
         pass  # Discord requires a subcommand when the command has children.
 
@@ -318,6 +362,11 @@ class SlashCommands(commands.Cog):
                                  image: nextcord.Attachment = nextcord.SlashOption(description="Imagem PNG, JPG, WebP ou GIF.", required=False),
                                  action: str = nextcord.SlashOption(description="Selecione reset para remover o fundo.", required=False, choices=["reset"])):
         await self.invoke(interaction, "profile background", attachments=[image] if image else [], action=action)
+
+    @profile.subcommand(name="pet", description="Escolha ou remova o pet do seu perfil.")
+    async def profile_pet(self, interaction: nextcord.Interaction,
+                          name: str = nextcord.SlashOption(description="Nome do pet, ou reset para remover.", required=False)):
+        await self.invoke(interaction, "profile pet", name=name)
 
 
 def setup(bot):
