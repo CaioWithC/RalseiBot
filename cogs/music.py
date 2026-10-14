@@ -2,6 +2,9 @@ import asyncio
 import csv
 import hashlib
 import logging
+import os
+import re
+import ssl
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,11 +16,20 @@ from nextcord.ext import commands
 from cogs.command_support import DualCommand
 from db import DAILY_TIMEZONE, EconomyError
 
+try:
+    import certifi
+    SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except Exception:
+    SSL_CONTEXT = None
+
 log = logging.getLogger(__name__)
 PLAYLIST_PATH = Path(__file__).resolve().parent.parent / "assets" / "playlist.csv"
 MUSICBRAINZ_SEARCH_URL = "https://musicbrainz.org/ws/2/release-group/"
 COVER_ART_URL = "https://coverartarchive.org/release-group/{mbid}"
 USER_AGENT = "RalseiBot/1.0 (https://github.com/CaioWithC/RalseiBot)"
+
+
+GOOGLE_SEARCH_IMAGE_URL = "https://www.google.com/search"
 
 
 def load_playlist(path=PLAYLIST_PATH):
@@ -142,42 +154,152 @@ class Music(commands.Cog):
                 result = await response.json()
         return select_release_group(result.get("release-groups", []), song)
 
+    async def search_google_image(self, session, album, artist, song=None):
+        query = f"{album} {artist} album cover".strip()
+
+        # 1. Google Custom Search JSON API (if configured in environment)
+        api_key = os.getenv("GOOGLE_API_KEY")
+        cse_id = os.getenv("GOOGLE_CSE_ID") or os.getenv("GOOGLE_SEARCH_CX")
+        if api_key and cse_id:
+            try:
+                params = {
+                    "q": query,
+                    "searchType": "image",
+                    "num": 1,
+                    "key": api_key,
+                    "cx": cse_id,
+                }
+                async with session.get(
+                    "https://www.googleapis.com/customsearch/v1",
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        items = data.get("items", [])
+                        if items and "link" in items[0]:
+                            return items[0]["link"]
+            except Exception as error:
+                log.warning("Google Custom Search API error for %s: %s", query, error)
+
+        # 2. Google Images search scraping
+        try:
+            params = {"q": query, "tbm": "isch"}
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                ),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            }
+            async with session.get(
+                GOOGLE_SEARCH_IMAGE_URL,
+                params=params,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    matches = re.findall(
+                        r'\["(https?://[^\s"]+?\.(?:jpg|jpeg|png|webp))"', text
+                    )
+                    valid = [
+                        u for u in matches
+                        if "gstatic.com" not in u and "google.com" not in u
+                    ]
+                    if valid:
+                        return valid[0]
+
+                    tbn_matches = re.findall(
+                        r'(https://encrypted-tbn0\.gstatic\.com/images\?q=tbn:[^"\'\s&;]+)',
+                        text,
+                    )
+                    if tbn_matches:
+                        return tbn_matches[0]
+        except Exception as error:
+            log.warning("Google Images search failed for %s: %s", query, error)
+
+        # 3. Fallback: Spotify oEmbed if spotify_id is available
+        if song and song.get("spotify_id"):
+            try:
+                spot_url = f"https://open.spotify.com/oembed?url=https://open.spotify.com/track/{song['spotify_id']}"
+                async with session.get(spot_url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json(content_type=None)
+                        if data.get("thumbnail_url"):
+                            return data["thumbnail_url"]
+            except Exception:
+                pass
+
+        # 4. Fallback: iTunes Search API
+        try:
+            itunes_url = "https://itunes.apple.com/search"
+            itunes_params = {
+                "term": f"{album} {artist}",
+                "media": "music",
+                "entity": "album",
+                "limit": 1,
+            }
+            async with session.get(
+                itunes_url,
+                params=itunes_params,
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json(content_type=None)
+                    results = data.get("results", [])
+                    if results and "artworkUrl100" in results[0]:
+                        return results[0]["artworkUrl100"].replace("100x100bb", "600x600bb")
+        except Exception:
+            pass
+
+        return None
+
     async def lookup_album_art(self, song):
-        cache_key = (_normalized(song["album"] or song["title"]), _normalized(song["artist"]))
+        album = song["album"] or song["title"]
+        artist = song["artist"]
+        cache_key = (_normalized(album), _normalized(artist))
         if cache_key in self._cover_cache:
             return self._cover_cache[cache_key]
 
         headers = {"User-Agent": USER_AGENT}
+        artwork_url = None
+        connector = aiohttp.TCPConnector(ssl=SSL_CONTEXT) if SSL_CONTEXT else None
         try:
             async with aiohttp.ClientSession(
+                connector=connector,
                 timeout=aiohttp.ClientTimeout(total=10),
                 headers=headers,
             ) as session:
-                release_group_id = await self._get_release_group(session, song)
-                if release_group_id is None:
-                    self._cover_cache[cache_key] = None
-                    return None
-                async with session.get(
-                    COVER_ART_URL.format(mbid=release_group_id),
-                    headers={"Accept": "application/json"},
-                ) as response:
-                    if response.status == 404:
-                        self._cover_cache[cache_key] = None
-                        return None
-                    response.raise_for_status()
-                    cover_art = await response.json()
-        except (aiohttp.ClientError, asyncio.TimeoutError) as error:
+                try:
+                    release_group_id = await self._get_release_group(session, song)
+                    if release_group_id is not None:
+                        async with session.get(
+                            COVER_ART_URL.format(mbid=release_group_id),
+                            headers={"Accept": "application/json"},
+                        ) as response:
+                            if response.status == 200:
+                                cover_art = await response.json()
+                                artwork_url = front_cover_url(cover_art)
+                except (aiohttp.ClientError, asyncio.TimeoutError):
+                    log.warning(
+                        "Could not search MusicBrainz/Cover Art Archive for %s by %s",
+                        song["title"],
+                        song["artist"],
+                        exc_info=True,
+                    )
+
+                if artwork_url is None:
+                    artwork_url = await self.search_google_image(session, album, artist, song)
+        except Exception:
             log.warning(
-                "Could not search MusicBrainz/Cover Art Archive for %s by %s",
+                "Could not lookup album art for %s by %s",
                 song["title"],
                 song["artist"],
                 exc_info=True,
             )
-            raise EconomyError(
-                "Não consegui pesquisar a capa do álbum agora. Tente novamente mais tarde."
-            ) from error
 
-        artwork_url = front_cover_url(cover_art)
         self._cover_cache[cache_key] = artwork_url
         return artwork_url
 
@@ -190,17 +312,24 @@ class Music(commands.Cog):
     async def musica(self, ctx):
         songs = load_playlist()
         song = songs[daily_song_index(ctx.author.id, len(songs))]
-        artwork_url = await self.lookup_album_art(song)
-        if artwork_url is None:
-            raise EconomyError("Não encontrei a capa do álbum desta música no Cover Art Archive.")
+        try:
+            artwork_url = await self.lookup_album_art(song)
+        except Exception:
+            log.warning("Falha ao buscar capa do álbum para %s", song["title"], exc_info=True)
+            artwork_url = None
 
         description = (
             f"{ctx.author.mention}, sua recomendação de hoje é **{song['title']}**."
         )
+        view = None
         if song["spotify_id"]:
-            description += (
-                f"\n[Ouvir no Spotify](https://open.spotify.com/track/{song['spotify_id']})"
+            spotify_url = f"https://open.spotify.com/track/{song['spotify_id']}"
+            description += f"\n[Ouvir no Spotify]({spotify_url})"
+            view = nextcord.ui.View()
+            view.add_item(
+                nextcord.ui.Button(label="Ouvir no Spotify", url=spotify_url)
             )
+
         embed = nextcord.Embed(
             title="🎵 Música do dia",
             description=description,
@@ -209,8 +338,13 @@ class Music(commands.Cog):
         embed.add_field(name="Artista", value=song["artist"], inline=True)
         if song["album"]:
             embed.add_field(name="Álbum", value=song["album"], inline=True)
-        embed.set_thumbnail(url=artwork_url)
-        await ctx.send(embed=embed)
+        if artwork_url:
+            embed.set_thumbnail(url=artwork_url)
+
+        kwargs = {"embed": embed}
+        if view is not None:
+            kwargs["view"] = view
+        await ctx.send(**kwargs)
 
 
 def setup(bot):

@@ -171,7 +171,7 @@ class MusicRecommendationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(embed.fields[0].name, "Artista")
         self.assertIn("open.spotify.com/track/spotify-track-id", embed.description)
 
-    async def test_missing_cover_art_is_reported_instead_of_sending_broken_embed(self):
+    async def test_missing_cover_art_still_sends_song_without_thumbnail(self):
         ctx = SimpleNamespace(
             author=SimpleNamespace(id=123, mention="<@123>"),
             send=AsyncMock(),
@@ -186,10 +186,87 @@ class MusicRecommendationTests(unittest.IsolatedAsyncioTestCase):
             }]),
             patch.object(cog, "lookup_album_art", new=AsyncMock(return_value=None)),
         ):
-            with self.assertRaises(EconomyError):
-                await Music.musica.callback(cog, ctx)
-        ctx.send.assert_not_awaited()
+            await Music.musica.callback(cog, ctx)
+
+        ctx.send.assert_awaited_once()
+        embed = ctx.send.call_args.kwargs["embed"]
+        self.assertEqual(embed.title, "🎵 Música do dia")
+        self.assertIsNone(embed.thumbnail.url)
+        self.assertNotIn("view", ctx.send.call_args.kwargs)
+
+    async def test_lookup_falls_back_to_google_search_when_musicbrainz_has_no_cover(self):
+        song = {"title": "Track", "artist": "The Artist", "album": "Album", "spotify_id": ""}
+        cog = Music(None)
+
+        class FakeResponse:
+            status = 200
+
+            def __init__(self, payload):
+                self.payload = payload
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_):
+                return None
+
+            def raise_for_status(self):
+                return None
+
+            async def json(self):
+                return self.payload
+
+        class FakeSession:
+            def __init__(self):
+                self.calls = []
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_):
+                return None
+
+            def get(self, url, **kwargs):
+                self.calls.append((url, kwargs))
+                return FakeResponse({"release-groups": []})
+
+        session = FakeSession()
+        with (
+            patch("cogs.music.aiohttp.ClientSession", return_value=session),
+            patch.object(
+                cog,
+                "search_google_image",
+                new=AsyncMock(return_value="https://example.com/google-cover.jpg"),
+            ) as mock_google,
+        ):
+            cover_url = await cog.lookup_album_art(song)
+
+        self.assertEqual(cover_url, "https://example.com/google-cover.jpg")
+        mock_google.assert_awaited_once_with(session, "Album", "The Artist", song)
+
+    async def test_search_google_image_extracts_image_url(self):
+        cog = Music(None)
+
+        class FakeHtmlResponse:
+            status = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_):
+                return None
+
+            async def text(self):
+                return '<html><body><script>["https://example.com/art.jpg", 500, 500]</script></body></html>'
+
+        class FakeSession:
+            def get(self, url, **kwargs):
+                return FakeHtmlResponse()
+
+        img_url = await cog.search_google_image(FakeSession(), "Album", "The Artist")
+        self.assertEqual(img_url, "https://example.com/art.jpg")
 
 
 if __name__ == "__main__":
     unittest.main()
+
