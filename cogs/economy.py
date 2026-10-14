@@ -1,12 +1,11 @@
 ﻿import random
-
 import asyncio
 import logging
 
 import nextcord
 from nextcord.ext import commands
 
-from db import database, EconomyError
+from db import DAILY_TIMEZONE, database, EconomyError
 from cogs.command_support import DualCommand
 from cogs.amounts import CoinAmount
 
@@ -120,16 +119,25 @@ class Economy(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+   
     @commands.command(cls=DualCommand, aliases=["saldo", "atm", "bal"], help="Mostra seu saldo em DarkMoney.")
     async def balance(self, ctx):
-        await ctx.send(f"{ctx.author.display_name}, seu saldo é: {database.balance(ctx.author.id):,} D$.")
+        embed = self.money_embed(
+            "💰 Saldo atual",
+            f"{ctx.author.mention}, seu saldo atual é **{database.balance(ctx.author.id):,} D$**.",
+        )
+        await ctx.send(embed=embed)
 
     @commands.command(cls=DualCommand, help="Receba sua recompensa diária. Renova todos os dias às 00:00 (GMT-3).")
     async def daily(self, ctx):
         reward = random.randint(5000, 100000)
         balance = database.daily(ctx.author.id, reward)
-        await ctx.send(f"{ctx.author.display_name}, você recebeu sua recompensa diária de {reward:,} "
-                       f"D$! Seu novo saldo é: {balance:,} D$.")
+        embed = self.money_embed(
+            "🎁 Recompensa diária",
+            f"{ctx.author.mention} recebeu **{reward:,} D$**!\n"
+            f"Seu novo saldo é **{balance:,} D$**.",
+        )
+        await ctx.send(embed=embed)
 
     @commands.command(cls=DualCommand, aliases=["transferir", "pix", "pagar"], help="Transfira DarkMoney com aceite das duas pessoas por botão: r.pay @membro valor (ex.: 100, 10K, 1.5M)")
     @commands.guild_only()
@@ -154,8 +162,12 @@ class Economy(commands.Cog):
     async def work(self, ctx):
         reward = random.randint(10000, 40000)
         balance = database.job_reward(ctx.author.id, "work", reward)
-        await ctx.send(f"{ctx.author.display_name}, você trabalhou e ganhou {reward:,} D$! "
-                       f"Seu novo saldo é: {balance:,} D$.")
+        embed = self.money_embed(
+            "💼 Trabalho concluído",
+            f"{ctx.author.mention} trabalhou e ganhou **{reward:,} D$**!\n"
+            f"Seu novo saldo é **{balance:,} D$**.",
+        )
+        await ctx.send(embed=embed)
 
     @commands.command(cls=DualCommand, aliases=["freelancer", "freelas", "frelas"], help="Faça um 'freelance' para ganhar DarkMoney: r.freelance")
     @commands.guild_only()
@@ -163,49 +175,77 @@ class Economy(commands.Cog):
     async def freelance(self, ctx):
         reward = random.randint(100, 10000)
         balance = database.job_reward(ctx.author.id, "freelance", reward)
-        await ctx.send(f"{ctx.author.display_name}, você fez um freelance e ganhou {reward:,} D$! "
-                       f"Seu novo saldo é: {balance:,} D$.")
+        embed = self.money_embed(
+            "🧩 Freelance concluído",
+            f"{ctx.author.mention} concluiu um freelance e ganhou **{reward:,} D$**!\n"
+            f"Seu novo saldo é **{balance:,} D$**.",
+        )
+        await ctx.send(embed=embed)
 
     @commands.command(cls=DualCommand, help="Roube DarkMoney de outro membro: r.rob @membro")
     @commands.guild_only()
     @commands.cooldown(1, 3600, lambda message: message.author.id)
     async def rob(self, ctx, member: nextcord.Member):
         if member.id == ctx.author.id:
-            await ctx.send("Você não pode roubar de si mesmo.")
+            await ctx.send(embed=self.money_embed("⚠️ Roubo inválido", "Você não pode roubar de si mesmo."))
             return
         if database.balance(member.id) < 1000:
-            await ctx.send(f"{member.display_name} não tem dinheiro suficiente para ser roubado.")
+            embed = self.money_embed(
+                "⚠️ Roubo indisponível",
+                f"{member.mention} não tem dinheiro suficiente para ser roubado.",
+            )
+            await ctx.send(embed=embed)
             return
         success = random.random() < 0.5
         if success:
             amount = random.randint(100, min(5000, database.balance(member.id)))
             balance = database.transfer(member.id, ctx.author.id, amount)
-            await ctx.send(f"{ctx.author.display_name} roubou {amount:,} D$ de {member.display_name}! "
-                           f"Novo saldo: {balance:,} D$.")
+            embed = self.money_embed(
+                "💸 Roubo bem-sucedido",
+                f"{ctx.author.mention} roubou **{amount:,} D$** de {member.mention}!\n"
+                f"Novo saldo: **{balance:,} D$**.",
+            )
+            await ctx.send(embed=embed)
         else:
-            await ctx.send(f"{ctx.author.display_name} tentou roubar {member.display_name}, mas falhou e foi pego!")
+            embed = self.money_embed(
+                "🚫 Roubo falhou",
+                f"{ctx.author.mention} tentou roubar {member.mention}, mas falhou e foi pego!",
+            )
+            await ctx.send(embed=embed)
 
     @commands.command(cls=DualCommand, help="Administrador: r.addbalance @membro valor")
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def addbalance(self, ctx, member: nextcord.Member, amount: int):
         balance = database.add_balance(member.id, amount)
-        await ctx.send(f"Adicionados {amount:,} D$ para {member.display_name}. "
-                       f"Novo saldo: {balance:,} D$.")
+        embed = self.money_embed(
+            "💰 Saldo ajustado",
+            f"Adicionados **{amount:,} D$** para {member.mention}.\n"
+            f"Novo saldo: **{balance:,} D$**.",
+        )
+        await ctx.send(embed=embed)
 
     @commands.command(cls=DualCommand, help="Administrador: r.setbalance @membro valor")
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def setbalance(self, ctx, member: nextcord.Member, amount: int):
         balance = database.set_balance(member.id, amount)
-        await ctx.send(f"Saldo de {member.display_name} definido para {balance:,} D$.")
+        embed = self.money_embed(
+            "💰 Saldo definido",
+            f"Saldo de {member.mention} definido para **{balance:,} D$**.",
+        )
+        await ctx.send(embed=embed)
 
     @commands.command(cls=DualCommand, help="Administrador: r.resetbalance @membro")
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def resetbalance(self, ctx, member: nextcord.Member):
         balance = database.reset_balance(member.id)
-        await ctx.send(f"Saldo de {member.display_name} redefinido para {balance:,} D$.")
+        embed = self.money_embed(
+            "💰 Saldo redefinido",
+            f"Saldo de {member.mention} redefinido para **{balance:,} D$**.",
+        )
+        await ctx.send(embed=embed)
 
 def setup(bot):
     bot.add_cog(Economy(bot))

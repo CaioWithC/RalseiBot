@@ -23,9 +23,8 @@ MAX_ACTIVITY_LENGTH = 128
 ACTIVITIES = (
     "🤍 STREAM LE SSERAFIM",
     "📚 {commands} comandos com r. e / | Use r.help ou /help",
-    "✨ Meu dono Caio tem as melhores ideias!",
+    "💿 THE WORLD REVOLVING - Toby Fox",
     "🏡 {server}",
-    "🐯 Tenho guarda compartilhada com o Bru!",
     "🌍 Levando carinho a {guilds} servidor(es)!",
     "🎲 Slots, blackjack e mines: perca tudo!",
     "🐐 Feito com carinho pelo Caio!",

@@ -365,13 +365,13 @@ class DiscordTests(unittest.IsolatedAsyncioTestCase):
         try:
             self.assertEqual(set(bot.extensions), {
                 f"cogs.{name}" for name in (
-                    "economy", "leaderboard", "games", "poker", "social", "activities",
+                    "economy", "music", "leaderboard", "games", "poker", "social", "activities",
                     "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno", "moderation", "slash_commands",
                 )
             })
-            for name in ("ping", "balance", "daily", "pay", "addbalance", "rich", "slots", "blackjack", "mines", "poker"):
+            for name in ("ping", "balance", "daily", "musica", "pay", "addbalance", "rich", "slots", "blackjack", "mines", "poker"):
                 self.assertIsNotNone(bot.get_command(name))
-            for alias, name in (("top", "rich"), ("bj", "blackjack"), ("slot", "slots"), ("minas", "mines"), ("pix", "pay"), ("uno", "six"), ("holdem", "poker")):
+            for alias, name in (("top", "rich"), ("bj", "blackjack"), ("slot", "slots"), ("minas", "mines"), ("pix", "pay"), ("uno", "six"), ("holdem", "poker"), ("music", "musica"), ("song", "musica")):
                 self.assertIs(bot.get_command(alias), bot.get_command(name))
         finally:
             await bot.close()

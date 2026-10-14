@@ -31,6 +31,7 @@ def user(user_id=111111111111111111, admin=False):
     avatar.with_size = lambda _: avatar
     avatar.with_static_format = lambda _: avatar
     return SimpleNamespace(id=user_id, display_name=f"Player {user_id}", bot=False,
+                           mention=f"<@{user_id}>",
                            guild_permissions=nextcord.Permissions(administrator=admin),
                            display_avatar=avatar)
 
@@ -158,6 +159,23 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         expected = {slash_name(c) for c in self.bot.walk_commands()}
         self.assertEqual(registered, expected)
         self.assertEqual(self.bot.command_prefix, "r.")
+
+    async def test_music_slash_command_uses_music_cog_and_returns_cover_embed(self):
+        with patch("cogs.music.load_playlist", return_value=[{
+            "title": "Track",
+            "artist": "The Artist",
+            "album": "Album",
+            "spotify_id": "spotify-track-id",
+        }]), patch(
+            "cogs.music.Music.lookup_album_art",
+            new=AsyncMock(return_value="https://example.com/cover.jpg"),
+        ):
+            result = await self.slash("musica")
+
+        embed = result.sent[-1]["embed"]
+        self.assertEqual(embed.title, "🎵 Música do dia")
+        self.assertEqual(embed.thumbnail.url, "https://example.com/cover.jpg")
+        self.assertIn("spotify-track-id", embed.description)
 
     async def test_poker_slash_and_prefix_use_same_buyin_and_avatar(self):
         self.bot._connection.user.display_avatar = self.author.display_avatar

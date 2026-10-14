@@ -193,6 +193,10 @@ class SlashCommands(commands.Cog):
     async def daily(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "daily")
 
+    @nextcord.slash_command(name="musica", description="Receba sua música do dia com a capa do álbum.")
+    async def musica(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "musica")
+
     @nextcord.slash_command(name="missions", description="Veja suas missões diárias ou resgate os bônus de DarkMoney.")
     async def missions(self, interaction: nextcord.Interaction,
                        action: str = nextcord.SlashOption(description="Ver progresso ou resgatar todos os bônus disponíveis.",
