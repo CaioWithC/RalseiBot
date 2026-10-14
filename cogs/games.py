@@ -8,8 +8,10 @@ from nextcord.ext import commands
 from db import database, EconomyError
 from cogs.amounts import BetAmount
 from cogs.command_support import DualCommand
-from cogs.game_rules import (Blackjack, Mines, RNG, SLOT_SYMBOLS, SLOT_TRIPLES,
-                        format_hand, hand_value, slot_multiplier, mines_multiplier)
+from cogs.game_rules import (Blackjack, Mines, Dice, DICE_SIDES, DICE_MULTIPLIERS,
+                        RNG, SLOT_SYMBOLS, SLOT_TRIPLES,
+                        format_hand, hand_value, slot_multiplier, mines_multiplier,
+                        parse_dice, validate_guess)
 
 log = logging.getLogger(__name__)
 GREEN = 0x77E5BC
@@ -61,7 +63,7 @@ class BettingView(nextcord.ui.View):
                 self.game.stand()
                 self.game.result = "Tempo esgotado: parar automático. " + self.game.result
                 self.settle()
-            elif self.game.revealed:
+            elif getattr(self.game, "revealed", None):
                 self.game.cashout()
                 self.game.result = "Tempo esgotado: retirada automática."
                 self.settle()
@@ -213,6 +215,147 @@ class MinesView(BettingView):
         return self.add_summary(embed)
 
 
+class DiceTypeButton(nextcord.ui.Button):
+    def __init__(self, sides):
+        multiplier = DICE_MULTIPLIERS[sides]
+        super().__init__(label=f"d{sides} • {multiplier}×", emoji="🎲",
+                         style=nextcord.ButtonStyle.primary, row=0)
+        self.sides = sides
+
+    async def callback(self, interaction):
+        view = self.view
+        if view is None or view.done:
+            return
+        await view.act(interaction, lambda: view.select_sides(self.sides))
+
+
+class DiceNumberButton(nextcord.ui.Button):
+    def __init__(self, number, sides):
+        if sides == 6:
+            row = (number - 1) // 3
+        elif sides in (8, 12):
+            row = (number - 1) // 4
+        else:
+            row = (number - 1) // 5
+        super().__init__(label=str(number), style=nextcord.ButtonStyle.secondary, row=row)
+        self.number = number
+        self.sides = sides
+
+    async def callback(self, interaction):
+        view = self.view
+        if view is None or view.done:
+            return
+        await view.act(interaction, lambda: view.pick_number(self.number))
+
+
+class DiceBackButton(nextcord.ui.Button):
+    def __init__(self, row):
+        super().__init__(label="Trocar dado", emoji="🔙",
+                         style=nextcord.ButtonStyle.secondary, row=row)
+
+    async def callback(self, interaction):
+        view = self.view
+        if view is None or view.done:
+            return
+        await view.act(interaction, view.back_to_dice_selection)
+
+
+class DiceView(BettingView):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.game.sides is None:
+            self.show_dice_selection()
+        else:
+            self.show_number_selection(self.game.sides)
+
+    def show_dice_selection(self):
+        self.clear_items()
+        for sides in DICE_SIDES:
+            self.add_item(DiceTypeButton(sides))
+
+    def show_number_selection(self, sides):
+        self.clear_items()
+        for number in range(1, sides + 1):
+            self.add_item(DiceNumberButton(number, sides))
+        if not self.done and self.game.payout is None:
+            back_row = 2 if sides in (6, 8) else 3 if sides == 12 else 4
+            self.add_item(DiceBackButton(back_row))
+
+    def select_sides(self, sides):
+        if self.done:
+            return
+        self.game.choose_sides(sides)
+        self.show_number_selection(sides)
+
+    def back_to_dice_selection(self):
+        if self.done:
+            return
+        self.game.reset_sides()
+        self.show_dice_selection()
+
+    def pick_number(self, number):
+        if self.done:
+            return
+        self.game.play(self.game.sides, number)
+
+    def embed(self):
+        game = self.game
+        if game.sides is None:
+            embed = nextcord.Embed(
+                title="🎲 Aposta no Dado • Escolha o dado",
+                color=GREEN,
+                description=(
+                    "Escolha quantos lados o dado terá para a sua aposta.\n"
+                    "**Quanto mais lados, maior o multiplicador e o prêmio!**\n\n"
+                    + "\n".join(
+                        f"• **d{s}**: multiplicador **{DICE_MULTIPLIERS[s]}×** (chances: 1 em {s})"
+                        for s in DICE_SIDES
+                    )
+                ),
+            )
+            if not self.done:
+                embed.set_footer(text="Aposta reservada • 120s sem jogar: reembolso • Retornos incluem a aposta")
+            return self.add_summary(embed)
+
+        if not self.done and game.payout is None:
+            embed = nextcord.Embed(
+                title=f"🎲 Aposta no Dado • d{game.sides}",
+                color=GREEN,
+                description=(
+                    f"Você escolheu o **d{game.sides}** (multiplicador **{DICE_MULTIPLIERS[game.sides]}×**).\n"
+                    f"Escolha em qual número você aposta que o dado vai cair (1 a {game.sides}):"
+                ),
+            )
+            embed.set_footer(text="Aposta reservada • 120s sem jogar: reembolso • Retornos incluem a aposta")
+            return self.add_summary(embed)
+
+        if self.done and game.sides is not None:
+            for item in self.children:
+                if isinstance(item, DiceNumberButton):
+                    if item.number == game.roll and item.number == game.guess:
+                        item.style = nextcord.ButtonStyle.success
+                        item.emoji = "🎉"
+                    elif item.number == game.roll:
+                        item.style = nextcord.ButtonStyle.primary
+                        item.emoji = "🎲"
+                    elif item.number == game.guess:
+                        item.style = nextcord.ButtonStyle.danger
+                        item.emoji = "❌"
+                    item.disabled = True
+                elif isinstance(item, DiceBackButton):
+                    item.disabled = True
+
+        embed = nextcord.Embed(
+            title=f"🎲 Aposta no Dado • d{game.sides}",
+            color=GREEN,
+            description=game.result,
+        )
+        embed.add_field(name="Dado", value=f"d{game.sides} ({DICE_MULTIPLIERS[game.sides]}×)", inline=True)
+        embed.add_field(name="Seu palpite", value=str(game.guess), inline=True)
+        embed.add_field(name="Resultado do dado", value=f"🎲 {game.roll}", inline=True)
+        return self.add_summary(embed)
+
+
 class Games(commands.Cog):
     def __init__(self, bot, storage=None):
         self.bot = bot
@@ -269,6 +412,20 @@ class Games(commands.Cog):
         await self.start_game(ctx, amount, "mines", lambda stake: Mines(stake, mine_count if mine_count is not None else 3),
                               MinesView, choose_mines=mine_count is None)
 
+    @commands.command(cls=DualCommand, aliases=["dado", "dados"], help="Aposte no dado: r.dice <aposta> [dado] [número]. Escolha d6 (6×), d8 (8×), d12 (12×) ou d20 (20×). Omita o dado ou o número para jogar com botões.")
+    @commands.cooldown(1, 3, lambda message: message.author.id)
+    async def dice(self, ctx, amount: BetAmount, dice: str = None, number: int = None):
+        sides = parse_dice(dice)
+        if number is not None and sides is None:
+            raise EconomyError("Escolha o dado (d6, d8, d12 ou d20) para o qual você deseja apostar o número.")
+        guess = validate_guess(number, sides) if number is not None else None
+        await self.start_game(
+            ctx, amount, "dice",
+            lambda stake: Dice(stake, sides=sides, guess=guess),
+            DiceView,
+        )
+
 
 def setup(bot):
     bot.add_cog(Games(bot))
+

@@ -313,6 +313,16 @@ class SlashCommands(commands.Cog):
                                                            required=False, min_value=1, max_value=15)):
         await self.invoke(interaction, "mines", amount=amount, mine_count=mine_count)
 
+    @nextcord.slash_command(name="dice", description="Aposte no dado: escolha d6, d8, d12 ou d20 e tente acertar o número.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def dice(self, interaction: nextcord.Interaction,
+                   amount: str = nextcord.SlashOption(description=BET_DESCRIPTION),
+                   dice: str = nextcord.SlashOption(description="Tipo de dado (d6, d8, d12 ou d20); omita para escolher nos botões.",
+                                                    required=False, choices=["d6", "d8", "d12", "d20"]),
+                   number: int = nextcord.SlashOption(description="Número em que deseja apostar (1 a 20); omita para escolher nos botões.",
+                                                      required=False, min_value=1, max_value=20)):
+        await self.invoke(interaction, "dice", amount=amount, dice=dice, number=number)
+
     @nextcord.slash_command(name="marry", description="Peça alguém em casamento. As duas pessoas precisam confirmar nos botões.",
                             integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def marry(self, interaction: nextcord.Interaction,

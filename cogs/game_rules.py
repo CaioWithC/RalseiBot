@@ -122,3 +122,86 @@ class Mines:
         if self.payout is None and self.revealed:
             self.payout = self.cashout_value()
             self.result = "Você retirou seus DarkMoney!"
+
+
+DICE_SIDES = (6, 8, 12, 20)
+DICE_MULTIPLIERS = {6: 6, 8: 8, 12: 12, 20: 20}
+
+
+def parse_dice(value):
+    if value is None:
+        return None
+    val_str = str(value).strip().lower()
+    if val_str.startswith("d"):
+        val_str = val_str[1:]
+    if val_str in ("6", "8", "12", "20"):
+        return int(val_str)
+    from db import EconomyError
+    raise EconomyError("Escolha um dado válido: **d6**, **d8**, **d12** ou **d20**.")
+
+
+def validate_guess(guess, sides=None):
+    if guess is None:
+        return None
+    from db import EconomyError
+    try:
+        val = int(guess)
+    except (ValueError, TypeError):
+        raise EconomyError("O número do palpite deve ser um número inteiro.")
+    if sides is not None:
+        if not 1 <= val <= sides:
+            raise EconomyError(f"Para o dado d{sides}, escolha um número entre 1 e {sides}.")
+    else:
+        if not 1 <= val <= 20:
+            raise EconomyError("Escolha um número entre 1 e 20.")
+    return val
+
+
+class Dice:
+    def __init__(self, stake, sides=None, guess=None, roll=None):
+        if type(stake) is not int or stake <= 0:
+            raise ValueError("Aposta inválida.")
+        if sides is not None and sides not in DICE_MULTIPLIERS:
+            raise ValueError("Dado inválido. Escolha d6, d8, d12 ou d20.")
+        self.stake = stake
+        self.sides = sides
+        self.guess = guess
+        self.roll = roll
+        self.payout = None
+        self.result = "Escolha o dado e o número em que deseja apostar."
+        if sides is not None and guess is not None:
+            self.play(sides, guess, roll=roll)
+
+    def choose_sides(self, sides):
+        if self.payout is not None:
+            return
+        if sides not in DICE_MULTIPLIERS:
+            raise ValueError("Dado inválido. Escolha d6, d8, d12 ou d20.")
+        self.sides = sides
+        self.result = f"Dado d{sides} selecionado! Escolha o número da sua aposta (1 a {sides})."
+
+    def reset_sides(self):
+        if self.payout is not None:
+            return
+        self.sides = None
+        self.guess = None
+        self.result = "Escolha o dado e o número em que deseja apostar."
+
+    def play(self, sides, guess, roll=None):
+        if self.payout is not None:
+            return
+        if sides not in DICE_MULTIPLIERS:
+            raise ValueError("Dado inválido. Escolha d6, d8, d12 ou d20.")
+        if type(guess) is not int or not 1 <= guess <= sides:
+            raise ValueError(f"Para o dado d{sides}, escolha um número entre 1 e {sides}.")
+        self.sides = sides
+        self.guess = guess
+        multiplier = DICE_MULTIPLIERS[sides]
+        self.roll = RNG.randint(1, sides) if roll is None else roll
+        if self.roll == self.guess:
+            self.payout = self.stake * multiplier
+            self.result = f"O dado caiu em **{self.roll}**! Você acertou e ganhou com multiplicador de **{multiplier}×**!"
+        else:
+            self.payout = 0
+            self.result = f"O dado caiu em **{self.roll}**! Você escolheu **{self.guess}**. Não foi dessa vez!"
+
