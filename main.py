@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import math
 import os
 import time
@@ -11,6 +11,7 @@ load_dotenv()
 
 from db import EconomyError, database
 from cogs.command_support import DualCommand, ModerationError, slash_name
+from cogs.help_system import build_command_detail_embed, build_home_embed, HelpView
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +72,8 @@ def create_bot():
 
     @bot.command(cls=DualCommand, name="help", help="Lista os comandos ou mostra sua ajuda: r.help [comando] ou /help.")
     async def help_command(ctx, *, command: str = None):
-        embed = nextcord.Embed(title="Comandos do Ralsei", color=0x77E5BC)
+        is_interaction = getattr(ctx, "interaction", None) is not None
+        kwargs = {"ephemeral": True} if is_interaction else {}
         if command:
             name = command.strip().removeprefix("r.").removeprefix("/")
             if name == "profile view":
@@ -80,26 +82,15 @@ def create_bot():
                 name = "six"
             target = bot.get_command(name)
             if target is None:
-                await ctx.send("Comando não encontrado. Use `r.help` ou `/help` para ver a lista.")
+                await ctx.send("Comando não encontrado. Use `r.help` ou `/help` para ver a lista.", **kwargs)
                 return
-            embed.title = f"Ajuda: {target.qualified_name}"
-            embed.description = target.help
-            embed.add_field(name="Prefixo", value=f"`r.{target.qualified_name} {target.signature}`", inline=False)
-            embed.add_field(name="Slash", value=f"`/{slash_name(target)}` — preencha as opções no Discord.", inline=False)
-            if target.aliases:
-                parent = f"{target.parent.qualified_name} " if target.parent else ""
-                embed.add_field(name="Aliases do prefixo", value=", ".join(f"`r.{parent}{alias}`" for alias in target.aliases), inline=False)
+            embed = build_command_detail_embed(target, ctx.author)
+            await ctx.send(embed=embed, **kwargs)
         else:
-            embed.description = ("Use **r.** ou **/**. Ex.: `r.mines 100 5` ou `/mines amount:100 mine_count:5`.\n"
-                                 "Veja detalhes com `r.help mines` ou `/help command:mines`.\n"
-                                 "Os aliases continuam disponíveis com o prefixo r.; cooldowns são compartilhados.")
-            for target in sorted(bot.walk_commands(), key=lambda item: item.qualified_name):
-                if len(embed.fields) == 25:
-                    await ctx.send(embed=embed)
-                    embed = nextcord.Embed(title="Comandos do Ralsei (continuação)", color=0x77E5BC)
-                embed.add_field(name=f"r.{target.qualified_name} · /{slash_name(target)}",
-                                value=target.short_doc[:200] or "Veja a ajuda do comando.", inline=False)
-        await ctx.send(embed=embed)
+            embed = build_home_embed(bot, ctx.author)
+            view = HelpView(bot, ctx.author.id)
+            message = await ctx.send(embed=embed, view=view, **kwargs)
+            view.message = message
 
     @bot.command(cls=DualCommand, name="sync",
                  help="Administrador: sincroniza os comandos de barra com o Discord.")

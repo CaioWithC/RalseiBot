@@ -25,9 +25,9 @@ class SlashCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def invoke(self, interaction, name, *, attachments=(), **options):
+    async def invoke(self, interaction, name, *, attachments=(), ephemeral=False, **options):
         ctx = InteractionContext(self.bot, interaction, self.bot.get_command(name), options, attachments)
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=ephemeral)
         # Bot.invoke runs the original command's checks and shared cooldowns.
         await self.bot.invoke(ctx)
 
@@ -121,7 +121,7 @@ class SlashCommands(commands.Cog):
                             integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def help(self, interaction: nextcord.Interaction,
                    command: str = nextcord.SlashOption(description="Ex.: mines, pay ou profile background.", required=False)):
-        await self.invoke(interaction, "help", command=command)
+        await self.invoke(interaction, "help", command=command, ephemeral=True)
 
     @nextcord.slash_command(name="sync", description="Administrador: sincroniza os comandos de barra com o Discord.",
                             contexts=GUILD_ONLY, default_member_permissions=ADMIN)

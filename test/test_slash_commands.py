@@ -834,23 +834,74 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("/profile background", result.sent[0]["content"])
 
     async def test_help_lists_both_forms_and_resolves_prefix_aliases(self):
+        from cogs.help_system import HELP_CATEGORIES
         result = await self.slash("help")
-        embeds = [message["embed"] for message in result.sent]
-        fields = [field for embed in embeds for field in embed.fields]
-        self.assertEqual(len(fields), sum(1 for _ in self.bot.walk_commands()))
-        for embed in embeds:
-            self.assertLessEqual(len(embed.fields), 25)
-            self.assertLessEqual(len(embed), 6000)
-        self.assertIn("/profile view", " ".join(field.name for field in fields))
+        self.assertTrue(result.sent[0].get("ephemeral"))
+        embed = result.sent[0]["embed"]
+        self.assertIn("Central de Ajuda", embed.title)
+        self.assertEqual(embed.color.value, 0x77E5BC)
+
+        view = result.sent[0]["view"]
+        self.assertIsNotNone(view)
+        select = view.children[0]
+        self.assertIsInstance(select, nextcord.ui.Select)
+        options = {opt.value: opt for opt in select.options}
+        self.assertIn("home", options)
+        for cat_key in HELP_CATEGORIES:
+            self.assertIn(cat_key, options)
+
+        # Ensure all bot commands are covered across the categories
+        all_cat_cmds = {cmd for cat in HELP_CATEGORIES.values() for cmd in cat["commands"]}
+        for cmd in self.bot.walk_commands():
+            self.assertIn(cmd.qualified_name, all_cat_cmds)
+
+        # Test selecting a category updates the embed with its commands
+        select._selected_values = ["social"]
+        click = self.interaction("help")
+        click.response.edit_message = AsyncMock()
+        await select.callback(click)
+        click.response.edit_message.assert_awaited_once()
+        social_embed = click.response.edit_message.call_args.kwargs["embed"]
+        self.assertIn("Social", social_embed.title)
+        field_names = " ".join(f.name for f in social_embed.fields)
+        self.assertIn("/profile view", field_names)
+
+        # Test selecting games category
+        select._selected_values = ["jogos"]
+        click_games = self.interaction("help")
+        click_games.response.edit_message = AsyncMock()
+        await select.callback(click_games)
+        games_embed = click_games.response.edit_message.call_args.kwargs["embed"]
+        self.assertIn("Jogos", games_embed.title)
+        games_fields = " ".join(f.name for f in games_embed.fields)
+        self.assertIn("r.mines", games_fields)
+
+        # Test that interaction_check protects the menu from non-owners
+        intruder = self.interaction("help", author=self.member)
+        intruder.response.send_message = AsyncMock()
+        self.assertFalse(await view.interaction_check(intruder))
+        intruder.response.send_message.assert_awaited_once()
+        self.assertTrue(intruder.response.send_message.call_args.kwargs["ephemeral"])
+        self.assertIn("Apenas quem pediu", intruder.response.send_message.call_args.args[0])
+
+        owner = self.interaction("help", author=self.author)
+        self.assertTrue(await view.interaction_check(owner))
+
+        # Test prefix context produces equivalent embed and view
         ctx = await self.prefix_context("r.help")
         await ctx.command.invoke(ctx)
-        self.assertEqual([call.kwargs["embed"].to_dict() for call in ctx.send.call_args_list],
-                         [embed.to_dict() for embed in embeds])
+        self.assertEqual(ctx.send.call_args.kwargs["embed"].title, embed.title)
+        self.assertIsInstance(ctx.send.call_args.kwargs["view"], nextcord.ui.View)
+
+        # Test single command help across forms
         for name in ("minas", "profile background", "/profile view", "r.perfil cor"):
-            result = await self.slash("help", command=name)
-            self.assertIn("Ajuda:", result.sent[0]["embed"].title)
-        result = await self.slash("help", command="unknown")
-        self.assertIn("não encontrado", result.sent[0]["content"])
+            res = await self.slash("help", command=name)
+            self.assertIn("Ajuda:", res.sent[0]["embed"].title)
+            self.assertTrue(res.sent[0].get("ephemeral"))
+
+        res = await self.slash("help", command="unknown")
+        self.assertIn("não encontrado", res.sent[0]["content"])
+        self.assertTrue(res.sent[0].get("ephemeral"))
 
     async def test_global_checks_and_invocation_hooks_are_not_bypassed(self):
         before, after = AsyncMock(), AsyncMock()

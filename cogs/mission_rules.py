@@ -14,5 +14,4 @@ MISSIONS = (
     Mission("daily", "Pegue daily hoje!", 1, 2500),
     Mission("work", "Um dia de trabalho", 1, 5000),
     Mission("freelance", "Talento independente", 3, 7500),
-    Mission("musica", "Veja sua música diaria", 1, 1000),
 )
