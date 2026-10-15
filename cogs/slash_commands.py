@@ -378,6 +378,14 @@ class SlashCommands(commands.Cog):
                           name: str = nextcord.SlashOption(description="Nome do pet, ou reset para remover.", required=False)):
         await self.invoke(interaction, "profile pet", name=name)
 
+    @nextcord.slash_command(name="namemc", description="Vincule ou consulte sua conta do NameMC/Minecraft.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def namemc(self, interaction: nextcord.Interaction,
+                     nick: str = nextcord.SlashOption(description="Nome da conta do Minecraft para vincular.", required=False),
+                     member: nextcord.User = nextcord.SlashOption(description="Ver a conta NameMC vinculada de outro membro.", required=False),
+                     action: str = nextcord.SlashOption(description="Ação especial (ex: desvincular).", choices=["desvincular"], required=False)):
+        await self.invoke(interaction, "namemc", nick=nick, member=member, action=action)
+
 
 def setup(bot):
     bot.add_cog(SlashCommands(bot))

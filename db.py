@@ -112,6 +112,7 @@ class SocialProfile(Base):
     about = Column(String(300), nullable=False, default="")
     background = Column(LargeBinary, nullable=True)
     pet = Column(String(100), nullable=True)
+    namemc = Column(String(32), nullable=True)
 
 
 class ShipScore(Base):
@@ -219,6 +220,8 @@ class Database:
                 columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(social_profiles)").fetchall()]
                 if columns and "pet" not in columns:
                     conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN pet VARCHAR(100)")
+                if columns and "namemc" not in columns:
+                    conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN namemc VARCHAR(32)")
         except Exception:
             pass
 
@@ -677,10 +680,11 @@ class Database:
             )))
             return {"discord_id": user.discord_id, "balance": user.balance, "rank": ahead + 1,
                     "color": profile.color, "about": profile.about, "background": profile.background,
-                    "pet": getattr(profile, "pet", None)}
+                    "pet": getattr(profile, "pet", None),
+                    "namemc": getattr(profile, "namemc", None)}
 
     def update_profile(self, discord_id, **changes):
-        if not changes or changes.keys() - {"color", "about", "background", "pet"}:
+        if not changes or changes.keys() - {"color", "about", "background", "pet", "namemc"}:
             raise EconomyError("Campo de perfil inválido.")
         with self.transaction() as session:
             self.user(session, discord_id)

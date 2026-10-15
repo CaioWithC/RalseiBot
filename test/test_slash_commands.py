@@ -950,6 +950,22 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         ban_res = await self.slash("ban", member=self.member, guild=False)
         self.assertIn("servidor", ban_res.sent[0]["content"])
 
+    async def test_namemc_slash_command_links_and_shows_embed(self):
+        fake_profile = {
+            "username": "CaioWithC",
+            "uuid": "742c4cf2-1a77-44eb-b40c-9a0a94c6d0ba",
+            "raw_id": "742c4cf21a7744ebb40c9a0a94c6d0ba",
+            "date_str": "03/01/2021",
+            "timestamp": 1609697268,
+        }
+        with patch("cogs.social.fetch_minecraft_profile", AsyncMock(return_value=fake_profile)):
+            res = await self.slash("namemc", nick="CaioWithC")
+            self.assertEqual(self.db.profile(self.author.id)["namemc"], "CaioWithC")
+            embed = res.sent[0]["embed"]
+            self.assertEqual(embed.title, "Nome: CaioWithC")
+            self.assertIn("Idade da conta: 03/01/2021", embed.description)
+            self.assertEqual(embed.color.value, 0xBE6C72)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,6 +31,7 @@ HELP_CATEGORIES = {
             "profile about",
             "profile background",
             "profile pet",
+            "namemc",
             "marry",
             "marriage",
             "divorce",

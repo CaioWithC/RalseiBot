@@ -1,5 +1,6 @@
 """Persistent user profiles rendered locally as PNG cards."""
 import asyncio
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 import re
@@ -7,6 +8,7 @@ import time
 import uuid
 import warnings
 
+import aiohttp
 import nextcord
 from nextcord.ext import commands
 from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
@@ -652,6 +654,195 @@ class Social(commands.Cog):
         self.storage.update_profile(ctx.author.id, pet=match)
         pet_display = pets[match]["name"]
         await ctx.send(f"Pet alterado para **{pet_display}**! Veja com `r.profile`.")
+
+    @commands.command(cls=DualCommand, name="namemc", aliases=["minecraft", "mc"],
+                      help="Vincule ou veja sua conta do NameMC pelo nome: r.namemc [nick ou @usuário]")
+    @commands.cooldown(1, 3, lambda message: message.author.id)
+    async def namemc(self, ctx, nick: str = None, member: nextcord.User = None, action: str = None):
+        target_user = member
+        target_user_id = member.id if member else None
+        target_nick = nick
+        selected_action = action
+
+        if target_nick:
+            cleaned = target_nick.strip()
+            if cleaned.lower() in {"unlink", "desvincular", "remover"}:
+                selected_action = "desvincular"
+                target_nick = None
+            elif mention_match := re.match(r"^<@!?(\d+)>$", cleaned):
+                target_user_id = int(mention_match.group(1))
+                target_user = (ctx.guild.get_member(target_user_id) if ctx.guild else None) or self.bot.get_user(target_user_id)
+                target_nick = None
+            elif cleaned.isdigit() and len(cleaned) >= 17:
+                target_user_id = int(cleaned)
+                target_user = (ctx.guild.get_member(target_user_id) if ctx.guild else None) or self.bot.get_user(target_user_id)
+                target_nick = None
+            elif cleaned.lower().startswith("link "):
+                target_nick = cleaned[5:].strip()
+
+        if selected_action == "desvincular":
+            data = self.storage.profile(ctx.author.id)
+            if not data.get("namemc"):
+                raise EconomyError("Você não possui uma conta do NameMC vinculada.")
+            self.storage.update_profile(ctx.author.id, namemc=None)
+            await ctx.send("Sua conta do NameMC foi desvinculada com sucesso.")
+            return
+
+        if target_user_id and target_user_id != ctx.author.id:
+            data = self.storage.profile(target_user_id)
+            linked_nick = data.get("namemc")
+            if not linked_nick:
+                name = target_user.display_name if target_user else f"UID {target_user_id}"
+                raise EconomyError(f"**{name}** ainda não vinculou uma conta do NameMC.")
+            profile_data = await fetch_minecraft_profile(linked_nick)
+            if not profile_data:
+                raise EconomyError("Não foi possível carregar as informações da conta do Minecraft.")
+            embed = create_namemc_embed(profile_data)
+            await ctx.send(embed=embed)
+            return
+
+        if target_nick:
+            profile_data = await fetch_minecraft_profile(target_nick)
+            if not profile_data:
+                raise EconomyError("Conta do Minecraft não encontrada. Verifique se o nome foi digitado corretamente.")
+            self.storage.update_profile(ctx.author.id, namemc=profile_data["username"])
+            embed = create_namemc_embed(profile_data)
+            await ctx.send(embed=embed)
+            return
+
+        data = self.storage.profile(ctx.author.id)
+        linked_nick = data.get("namemc")
+        if not linked_nick:
+            raise EconomyError("Você ainda não vinculou sua conta do NameMC. Use `r.namemc <seu_nick>` ou `/namemc nick:<seu_nick>` para vincular.")
+        profile_data = await fetch_minecraft_profile(linked_nick)
+        if not profile_data:
+            raise EconomyError("Não foi possível carregar as informações da sua conta do Minecraft.")
+        embed = create_namemc_embed(profile_data)
+        await ctx.send(embed=embed)
+
+
+NAMEMC_COLOR = 0xBE6C72
+
+
+async def fetch_minecraft_profile(query: str) -> dict | None:
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    timeout = aiohttp.ClientTimeout(total=6)
+
+    # 1. Try Crafty API (returns username, uuid, created_at, and name change history)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+            async with session.get(f"https://api.crafty.gg/api/v2/players/{query}") as resp:
+                if resp.status == 200:
+                    body = await resp.json()
+                    if body.get("success") and "data" in body:
+                        data = body["data"]
+                        username = data.get("username")
+                        uuid_str = data.get("uuid")
+                        raw_id = uuid_str.replace("-", "") if uuid_str else ""
+
+                        dates = []
+                        if data.get("created_at"):
+                            dates.append(data["created_at"])
+                        for u in data.get("usernames", []):
+                            if u.get("changed_at"):
+                                dates.append(u["changed_at"])
+
+                        oldest_dt = None
+                        for d_str in dates:
+                            try:
+                                dt = datetime.fromisoformat(d_str)
+                                if oldest_dt is None or dt < oldest_dt:
+                                    oldest_dt = dt
+                            except Exception:
+                                pass
+
+                        ts = int(oldest_dt.timestamp()) if oldest_dt else None
+                        formatted_date = oldest_dt.strftime("%d/%m/%Y") if oldest_dt else "Desconhecida"
+                        return {
+                            "username": username,
+                            "uuid": uuid_str,
+                            "raw_id": raw_id,
+                            "date_str": formatted_date,
+                            "timestamp": ts,
+                        }
+    except Exception:
+        pass
+
+    # 2. Try Mojang API as fallback
+    try:
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+            async with session.get(f"https://api.mojang.com/users/profiles/minecraft/{query}") as resp:
+                if resp.status == 200:
+                    body = await resp.json()
+                    raw_id = body.get("id", "")
+                    username = body.get("name", query)
+                    uuid_str = (
+                        f"{raw_id[:8]}-{raw_id[8:12]}-{raw_id[12:16]}-{raw_id[16:20]}-{raw_id[20:]}"
+                        if len(raw_id) == 32
+                        else raw_id
+                    )
+                    return {
+                        "username": username,
+                        "uuid": uuid_str,
+                        "raw_id": raw_id,
+                        "date_str": "Desconhecida",
+                        "timestamp": None,
+                    }
+    except Exception:
+        pass
+
+    # 3. Try PlayerDB as second fallback
+    try:
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+            async with session.get(f"https://playerdb.co/api/player/minecraft/{query}") as resp:
+                if resp.status == 200:
+                    body = await resp.json()
+                    if body.get("success") and "data" in body:
+                        player = body["data"].get("player", {})
+                        raw_id = player.get("raw_id", "")
+                        uuid_str = player.get("id", "")
+                        username = player.get("username", query)
+                        return {
+                            "username": username,
+                            "uuid": uuid_str,
+                            "raw_id": raw_id,
+                            "date_str": "Desconhecida",
+                            "timestamp": None,
+                        }
+    except Exception:
+        pass
+
+    return None
+
+
+def create_namemc_embed(data: dict) -> nextcord.Embed:
+    username = data["username"]
+    uuid_str = data["uuid"]
+    raw_id = data["raw_id"]
+    date_str = data.get("date_str") or "Desconhecida"
+    ts = data.get("timestamp")
+
+    if ts:
+        date_line = f"Idade da conta: {date_str} (<t:{ts}:R>)"
+    elif date_str != "Desconhecida":
+        date_line = f"Idade da conta: {date_str}"
+    else:
+        date_line = "Idade da conta: Não disponível"
+
+    namemc_url = f"https://namemc.com/profile/{username}"
+    description = (
+        f"{date_line}\n\n"
+        f"[NameMC]({namemc_url})\n\n"
+        f"-# uuid: ||{uuid_str}||"
+    )
+
+    embed = nextcord.Embed(
+        title=f"Nome: {username}",
+        description=description,
+        color=NAMEMC_COLOR,
+    )
+    embed.set_thumbnail(url=f"https://mc-heads.net/avatar/{raw_id}")
+    return embed
 
 
 def setup(bot):

@@ -235,7 +235,7 @@ class SocialCommandTests(unittest.IsolatedAsyncioTestCase):
         ctx = await self.invoke("r.profile")
         view = ctx.send.call_args.kwargs.get("view")
         self.assertEqual(type(view).__name__, "ProfileView")
-        self.assertTrue(any(getattr(item, "label", None) == "Escolher Pet" for item in view.children))
+        self.assertTrue(any(getattr(item, "label", None) in {"Trocar Pet", "Escolher Pet"} for item in view.children))
 
     async def test_pet_command_routes_selection_and_reset(self):
         await self.invoke("r.profile pet bamgeut")
@@ -293,7 +293,7 @@ class SocialCommandTests(unittest.IsolatedAsyncioTestCase):
             message=mock_msg,
             response=SimpleNamespace(send_message=AsyncMock()),
         )
-        button = next(item for item in parent_view.children if getattr(item, "label", None) == "Escolher Pet")
+        button = next(item for item in parent_view.children if getattr(item, "label", None) in {"Trocar Pet", "Escolher Pet"})
         await button.callback(interaction)
         interaction.response.send_message.assert_awaited_once()
         kwargs = interaction.response.send_message.call_args.kwargs
@@ -313,13 +313,83 @@ class SocialCommandTests(unittest.IsolatedAsyncioTestCase):
             message=SimpleNamespace(id=111222),
             response=SimpleNamespace(send_message=AsyncMock()),
         )
-        button = next(item for item in parent_view.children if getattr(item, "label", None) == "Escolher Pet")
+        button = next(item for item in parent_view.children if getattr(item, "label", None) in {"Trocar Pet", "Escolher Pet"})
         await button.callback(interaction)
         interaction.response.send_message.assert_awaited_once()
         kwargs = interaction.response.send_message.call_args.kwargs
         self.assertTrue(kwargs.get("ephemeral"))
         self.assertIn("Apenas o dono deste perfil", interaction.response.send_message.call_args.args[0])
         self.assertIsNone(kwargs.get("view"))
+
+    async def test_namemc_command_links_and_shows_embed(self):
+        fake_profile = {
+            "username": "CaioWithC",
+            "uuid": "742c4cf2-1a77-44eb-b40c-9a0a94c6d0ba",
+            "raw_id": "742c4cf21a7744ebb40c9a0a94c6d0ba",
+            "date_str": "03/01/2021",
+            "timestamp": 1609697268,
+        }
+        with patch("cogs.social.fetch_minecraft_profile", AsyncMock(return_value=fake_profile)):
+            ctx = await self.invoke("r.namemc CaioWithC")
+            self.assertEqual(self.db.profile(self.author.id)["namemc"], "CaioWithC")
+            embed = ctx.send.call_args.kwargs.get("embed")
+            self.assertIsNotNone(embed)
+            self.assertEqual(embed.title, "Nome: CaioWithC")
+            self.assertIn("Idade da conta: 03/01/2021 (<t:1609697268:R>)", embed.description)
+            self.assertIn("[NameMC](https://namemc.com/profile/CaioWithC)", embed.description)
+            self.assertIn("-# uuid: ||742c4cf2-1a77-44eb-b40c-9a0a94c6d0ba||", embed.description)
+            self.assertEqual(embed.color.value, 0xBE6C72)
+            self.assertEqual(embed.thumbnail.url, "https://mc-heads.net/avatar/742c4cf21a7744ebb40c9a0a94c6d0ba")
+
+    async def test_namemc_command_view_own_linked_account(self):
+        self.db.update_profile(self.author.id, namemc="CaioWithC")
+        fake_profile = {
+            "username": "CaioWithC",
+            "uuid": "742c4cf2-1a77-44eb-b40c-9a0a94c6d0ba",
+            "raw_id": "742c4cf21a7744ebb40c9a0a94c6d0ba",
+            "date_str": "03/01/2021",
+            "timestamp": 1609697268,
+        }
+        with patch("cogs.social.fetch_minecraft_profile", AsyncMock(return_value=fake_profile)):
+            ctx = await self.invoke("r.namemc")
+            embed = ctx.send.call_args.kwargs.get("embed")
+            self.assertIsNotNone(embed)
+            self.assertEqual(embed.title, "Nome: CaioWithC")
+
+    async def test_namemc_command_not_linked_raises_error(self):
+        with self.assertRaises(commands.CommandInvokeError) as caught:
+            await self.invoke("r.namemc")
+        self.assertIsInstance(caught.exception.original, EconomyError)
+        self.assertIn("Você ainda não vinculou", str(caught.exception.original))
+
+    async def test_namemc_command_desvincular(self):
+        self.db.update_profile(self.author.id, namemc="CaioWithC")
+        ctx = await self.invoke("r.namemc desvincular")
+        self.assertIsNone(self.db.profile(self.author.id)["namemc"])
+        self.assertIn("desvinculada com sucesso", ctx.send.call_args.args[0])
+
+    async def test_namemc_command_view_other_member(self):
+        other = user(222222222222222222)
+        self.db.update_profile(other.id, namemc="Notch")
+        fake_profile = {
+            "username": "Notch",
+            "uuid": "069a79f4-44e9-4726-a5be-fca90e38aaf5",
+            "raw_id": "069a79f444e94726a5befca90e38aaf5",
+            "date_str": "31/05/2021",
+            "timestamp": 1622432499,
+        }
+        with patch("cogs.social.fetch_minecraft_profile", AsyncMock(return_value=fake_profile)):
+            ctx = await self.invoke(f"r.namemc <@{other.id}>")
+            embed = ctx.send.call_args.kwargs.get("embed")
+            self.assertIsNotNone(embed)
+            self.assertEqual(embed.title, "Nome: Notch")
+
+    async def test_namemc_command_not_found_raises_error(self):
+        with patch("cogs.social.fetch_minecraft_profile", AsyncMock(return_value=None)):
+            with self.assertRaises(commands.CommandInvokeError) as caught:
+                await self.invoke("r.namemc invalidplayer")
+            self.assertIsInstance(caught.exception.original, EconomyError)
+            self.assertIn("Conta do Minecraft não encontrada", str(caught.exception.original))
 
 
 if __name__ == "__main__":
