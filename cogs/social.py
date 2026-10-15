@@ -9,11 +9,25 @@ import warnings
 
 import nextcord
 from nextcord.ext import commands
-from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 
 from db import database, EconomyError
-from cogs.leaderboard import font
+from cogs.leaderboard import font as _base_font
 from cogs.command_support import DualCommand, DualGroup
+
+
+def font(size, bold=False):
+    """Profile card font: prefer Segoe UI for a modern look, fall back to Arial/DejaVu."""
+    if bold:
+        candidates = ["segoeuib.ttf", "C:/Windows/Fonts/segoeuib.ttf"]
+    else:
+        candidates = ["segoeui.ttf", "C:/Windows/Fonts/segoeui.ttf"]
+    for name in candidates:
+        try:
+            return ImageFont.truetype(name, size, encoding="unic")
+        except OSError:
+            pass
+    return _base_font(size, bold)
 
 WIDTH, HEIGHT = 1000, 790
 HEADER_HEIGHT, BACKGROUND_HEIGHT = 190, 400
@@ -157,12 +171,41 @@ def marriage_duration(married_at):
     return "Menos de 1 min juntos"
 
 
+def _darken(hex_color, factor=0.65):
+    """Return a darker shade of a hex color."""
+    rgb = tuple(int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    dark = tuple(max(0, int(c * factor)) for c in rgb)
+    return f"#{dark[0]:02X}{dark[1]:02X}{dark[2]:02X}"
+
+
+def _draw_chevron(draw, header_h, color, width):
+    """Draw diagonal chevron layers that extend flush to the right edge."""
+    dark1 = _darken(color, 0.75)
+    dark2 = _darken(color, 0.60)
+    dark3 = _darken(color, 0.45)
+    # Three chevron layers, each with a pointed left edge filling to the right
+    tips = [620, 660, 700]  # left tip x-positions
+    colors = [dark1, dark2, dark3]
+    for tip_x, fill in zip(tips, colors):
+        draw.polygon([
+            (tip_x, header_h // 2),       # pointed tip
+            (tip_x + 50, 0),              # top-left of flat edge
+            (width, 0),                   # top-right corner
+            (width, header_h),            # bottom-right corner
+            (tip_x + 50, header_h),       # bottom-left of flat edge
+        ], fill=fill)
+
+
 def render_profile(profile, name, avatar=None, marriage=None):
     color = profile["color"]
     foreground = text_color(color)
     canvas = Image.new("RGB", (WIDTH, HEIGHT), color)
     draw = ImageDraw.Draw(canvas)
 
+    # ── Header chevron decoration ──
+    _draw_chevron(draw, HEADER_HEIGHT, color, WIDTH)
+
+    # ── Avatar circle ──
     draw.ellipse((26, 23, 172, 169), fill=foreground)
     portrait = None
     if avatar:
@@ -182,22 +225,28 @@ def render_profile(profile, name, avatar=None, marriage=None):
     else:
         initial = next((char.upper() for char in name if char.isalnum()), "?")
         draw.text((99, 96), initial, font=font(60, True), fill=color, anchor="mm")
-    draw.text((196, 29), "PERFIL", font=font(15, True), fill=foreground)
-    draw_fitted(draw, (193, 55), name, 39, 470, foreground, True)
-    draw_fitted(draw, (196, 109), f"UID: {profile['discord_id']}", 18,
-                290 if marriage else 475, foreground)
-    draw.text((714, 32), "RANK EM r.rich", font=font(16, True), fill=foreground)
-    draw_fitted(draw, (710, 55), f"#{profile['rank']:,}", 34, 256, foreground, True)
-    balance_x = 506 if marriage else 711
-    draw.text((balance_x + 3, 113), "DARKMONEY", font=font(15, True), fill=foreground)
-    draw_fitted(draw, (balance_x, 138), f"{profile['balance']:,}", 26,
-                180 if marriage else 257, foreground, True)
-    if marriage:
-        draw.text((710, 103), "CASADO COM", font=font(16), fill=foreground)
-        draw_fitted(draw, (710, 123), marriage["spouse_name"], 26, 258, foreground)
-        draw_fitted(draw, (710, 158), marriage_duration(marriage["married_at"]),
-                    13, 258, foreground)
 
+    # ── Left info: name, UID ──
+    draw_fitted(draw, (193, 30), name, 39, 400, foreground, True)
+    draw_fitted(draw, (196, 75), f"UID: {profile['discord_id']}", 16,
+                380, foreground)
+
+    # ── Darkmoney below name ──
+    draw.text((196, 123), "DARKMONEY", font=font(14, True), fill=foreground)
+    draw_fitted(draw, (196, 143), f"{profile['balance']:,}", 26, 350, foreground, True)
+
+    # ── Right info: rank ──
+    draw.text((770, 25), "RANK EM r.rank", font=font(16, True), fill=foreground, anchor="la")
+    draw_fitted(draw, (770, 48), f"#{profile['rank']:,}", 34, 200, foreground, True)
+
+    # ── Marriage info (right side, below rank) ──
+    if marriage:
+        draw.text((770, 100), "CASADO COM", font=font(14, True), fill=foreground)
+        draw_fitted(draw, (770, 120), marriage["spouse_name"], 22, 200, foreground)
+        draw_fitted(draw, (770, 148), marriage_duration(marriage["married_at"]),
+                    12, 200, foreground)
+
+    # ── Background / wallpaper section ──
     if profile["background"]:
         with Image.open(BytesIO(profile["background"])) as background:
             canvas.paste(ImageOps.fit(background.convert("RGB"), (WIDTH, BACKGROUND_HEIGHT),
@@ -209,7 +258,12 @@ def render_profile(profile, name, avatar=None, marriage=None):
         draw.text((WIDTH // 2, 365), "Seu espaço, seu estilo.", font=font(32, True), fill="#EBF7F3", anchor="mm")
         draw.text((WIDTH // 2, 414), "Envie uma imagem com r.profile background", font=font(20), fill="#A9CDC4", anchor="mm")
 
-    # Render pet if selected
+    # ── Footer: darker bar ──
+    footer_y = HEADER_HEIGHT + BACKGROUND_HEIGHT
+    footer_color = _darken(color, 0.75)
+    draw.rectangle((0, footer_y, WIDTH, HEIGHT), fill=footer_color)
+
+    # ── Render pet if selected ──
     pet_key = profile.get("pet")
     pet_image = None
     if pet_key:
@@ -231,13 +285,15 @@ def render_profile(profile, name, avatar=None, marriage=None):
             except (OSError, ValueError):
                 pet_image = None
 
-    draw.text((30, 614), "SOBRE MIM", font=font(23, True), fill=foreground)
+    # ── Bio text ──
+    draw.text((30, footer_y + 14), "BIO", font=font(20, True), fill=foreground)
     about = profile["about"] or "Conte um pouco sobre você com r.profile about <texto>."
     max_bio_width = WIDTH - 60 - (pet_image.width + 30 if pet_image else 0)
-    for size in range(24, 15, -1):
+    available_h = HEIGHT - footer_y - 50
+    for size in range(22, 14, -1):
         face = font(size)
         lines = wrap_text(draw, about, face, max_bio_width)
-        max_lines = 124 // (size + 5)
+        max_lines = available_h // (size + 5)
         if len(lines) <= max_lines:
             break
     if len(lines) > max_lines:
@@ -245,9 +301,11 @@ def render_profile(profile, name, avatar=None, marriage=None):
         while lines[-1] and draw.textlength(lines[-1] + "…", font=face) > max_bio_width:
             lines[-1] = lines[-1][:-1]
         lines[-1] += "…"
+    bio_start_y = footer_y + 45
     for index, line in enumerate(lines):
-        draw.text((30, 653 + index * (size + 5)), line, font=face, fill=foreground)
+        draw.text((30, bio_start_y + index * (size + 5)), line, font=face, fill=foreground)
 
+    # ── Pet image ──
     if pet_image:
         pos_x = WIDTH - pet_image.width - 25
         pos_y = HEIGHT - pet_image.height - 5
@@ -259,6 +317,89 @@ def render_profile(profile, name, avatar=None, marriage=None):
     return output
 
 
+async def _refresh_profile(cog, target, message, view):
+    """Re-render the profile card and edit the original message."""
+    try:
+        data = cog.storage.profile(target.id)
+        marriage = cog.storage.marriage(target.id)
+        if marriage:
+            spouse_id = int(marriage["second_id"] if str(target.id) == marriage["first_id"] else marriage["first_id"])
+            spouse = cog.bot.get_user(spouse_id)
+            if spouse is None:
+                try:
+                    spouse = await asyncio.wait_for(cog.bot.fetch_user(spouse_id), timeout=5)
+                except (nextcord.HTTPException, asyncio.TimeoutError):
+                    pass
+            marriage["spouse_name"] = f"@{spouse.name}" if spouse else f"UID: {spouse_id}"
+
+        avatar = None
+        try:
+            asset = target.display_avatar.with_size(256).with_static_format("png")
+            avatar = await asyncio.wait_for(asset.read(), timeout=5)
+        except (nextcord.HTTPException, asyncio.TimeoutError, AttributeError):
+            pass
+
+        output = await asyncio.to_thread(render_profile, data, target.display_name, avatar, marriage)
+        await message.edit(file=nextcord.File(output, filename="profile.png"), view=view)
+    except Exception:
+        pass
+
+
+class BioModal(nextcord.ui.Modal):
+    """Modal for editing the profile bio."""
+    def __init__(self, cog, target, parent_view):
+        super().__init__(title="Editar Bio", timeout=300)
+        self.cog = cog
+        self.target = target
+        self.parent_view = parent_view
+
+        current = cog.storage.profile(target.id).get("about") or ""
+        self.bio_input = nextcord.ui.TextInput(
+            label="Sua bio (até 300 caracteres)",
+            style=nextcord.TextInputStyle.paragraph,
+            placeholder="Conte um pouco sobre você...",
+            default_value=current,
+            required=False,
+            max_length=MAX_ABOUT_LENGTH,
+        )
+        self.add_item(self.bio_input)
+
+    async def callback(self, interaction: nextcord.Interaction):
+        text = (self.bio_input.value or "").strip()
+        if len(text) > MAX_ABOUT_LENGTH:
+            await interaction.response.send_message(
+                f"A bio deve ter no máximo {MAX_ABOUT_LENGTH} caracteres.", ephemeral=True)
+            return
+        self.cog.storage.update_profile(self.target.id, about=text)
+        await interaction.response.send_message(
+            "✏️ Bio atualizada com sucesso!" if text else "✏️ Bio removida.", ephemeral=True)
+
+        parent_msg = self.parent_view.message if self.parent_view else None
+        if parent_msg:
+            await _refresh_profile(self.cog, self.target, parent_msg, self.parent_view)
+
+
+class BackgroundPromptView(nextcord.ui.View):
+    """Ephemeral view that waits for a background image upload."""
+    def __init__(self, cog, target, parent_view):
+        super().__init__(timeout=60)
+        self.cog = cog
+        self.target = target
+        self.parent_view = parent_view
+
+    @nextcord.ui.button(label="Remover Fundo", emoji="🗑️", style=nextcord.ButtonStyle.danger)
+    async def remove_bg(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+        if interaction.user.id != self.target.id:
+            await interaction.response.send_message("Apenas o dono do perfil pode fazer isso!", ephemeral=True)
+            return
+        self.cog.storage.update_profile(self.target.id, background=None)
+        await interaction.response.edit_message(
+            content="🗑️ Fundo personalizado removido com sucesso!", view=None)
+        parent_msg = self.parent_view.message if self.parent_view else None
+        if parent_msg:
+            await _refresh_profile(self.cog, self.target, parent_msg, self.parent_view)
+
+
 class ProfileView(nextcord.ui.View):
     def __init__(self, cog, target, author_id, message=None):
         super().__init__(timeout=180)
@@ -266,22 +407,55 @@ class ProfileView(nextcord.ui.View):
         self.target = target
         self.author_id = author_id
         self.message = message
+        # Only show edit buttons when viewing your own profile
+        is_own = (target.id == author_id)
+        self.bg_button.disabled = not is_own
+        self.pet_button.disabled = not is_own
+        self.bio_button.disabled = not is_own
+        if not is_own:
+            self.bg_button.style = nextcord.ButtonStyle.secondary
+            self.pet_button.style = nextcord.ButtonStyle.secondary
+            self.bio_button.style = nextcord.ButtonStyle.secondary
 
-    @nextcord.ui.button(label="Escolher Pet", emoji="🐾", style=nextcord.ButtonStyle.secondary, custom_id="profile:choose_pet")
-    async def choose_pet(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+    @nextcord.ui.button(label="Trocar Fundo", emoji="🖼️", style=nextcord.ButtonStyle.primary, row=0)
+    async def bg_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+        if interaction.user.id != self.target.id:
+            await interaction.response.send_message("Apenas o dono deste perfil pode alterar o fundo!", ephemeral=True)
+            return
+        if self.message is None and interaction.message:
+            self.message = interaction.message
+        bg_view = BackgroundPromptView(self.cog, self.target, parent_view=self)
+        await interaction.response.send_message(
+            "🖼️ **Trocar foto de fundo**\n"
+            "Envie uma imagem com `r.profile background` (anexar imagem ao comando).\n"
+            "Ou clique abaixo para remover o fundo atual.",
+            view=bg_view,
+            ephemeral=True
+        )
+
+    @nextcord.ui.button(label="Trocar Pet", emoji="🐾", style=nextcord.ButtonStyle.primary, row=0)
+    async def pet_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         if interaction.user.id != self.target.id:
             await interaction.response.send_message("Apenas o dono deste perfil pode escolher o pet!", ephemeral=True)
             return
-
         if self.message is None and interaction.message:
             self.message = interaction.message
-
         select_view = PetSelectView(self.cog, self.target, parent_view=self)
         await interaction.response.send_message(
             "🐾 **Escolha um pet para o seu perfil:**\nSelecione uma opção no menu abaixo:",
             view=select_view,
             ephemeral=True
         )
+
+    @nextcord.ui.button(label="Trocar Bio", emoji="✏️", style=nextcord.ButtonStyle.primary, row=0)
+    async def bio_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+        if interaction.user.id != self.target.id:
+            await interaction.response.send_message("Apenas o dono deste perfil pode editar a bio!", ephemeral=True)
+            return
+        if self.message is None and interaction.message:
+            self.message = interaction.message
+        modal = BioModal(self.cog, self.target, parent_view=self)
+        await interaction.response.send_modal(modal)
 
 
 class PetSelectView(nextcord.ui.View):
@@ -349,31 +523,7 @@ class PetDropdown(nextcord.ui.Select):
         # Update original profile message if possible
         parent_msg = self.parent_view.message if self.parent_view else None
         if parent_msg:
-            try:
-                target = self.target
-                data = self.cog.storage.profile(target.id)
-                marriage = self.cog.storage.marriage(target.id)
-                if marriage:
-                    spouse_id = int(marriage["second_id"] if str(target.id) == marriage["first_id"] else marriage["first_id"])
-                    spouse = self.cog.bot.get_user(spouse_id)
-                    if spouse is None:
-                        try:
-                            spouse = await asyncio.wait_for(self.cog.bot.fetch_user(spouse_id), timeout=5)
-                        except (nextcord.HTTPException, asyncio.TimeoutError):
-                            pass
-                    marriage["spouse_name"] = f"@{spouse.name}" if spouse else f"UID: {spouse_id}"
-
-                avatar = None
-                try:
-                    asset = target.display_avatar.with_size(256).with_static_format("png")
-                    avatar = await asyncio.wait_for(asset.read(), timeout=5)
-                except (nextcord.HTTPException, asyncio.TimeoutError, AttributeError):
-                    pass
-
-                output = await asyncio.to_thread(render_profile, data, target.display_name, avatar, marriage)
-                await parent_msg.edit(file=nextcord.File(output, filename="profile.png"), view=self.parent_view)
-            except Exception:
-                pass
+            await _refresh_profile(self.cog, self.target, parent_msg, self.parent_view)
 
         if new_pet:
             msg = f"🐾 Pet alterado para **{pet_name}** com sucesso!"
