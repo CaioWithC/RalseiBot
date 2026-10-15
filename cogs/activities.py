@@ -129,26 +129,6 @@ class Activities(commands.Cog):
     def cog_unload(self):
         self.update_activity.cancel()
 
-    @commands.Cog.listener()
-    async def on_command_completion(self, ctx):
-        if ctx.command_failed:
-            return
-        self.completed_commands += 1
-        if ctx.guild is None or not ctx.author.guild_permissions.administrator:
-            return
-        if ctx.command.qualified_name == "activity":
-            return
-        now = self.clock()
-        if self.override is not None and self.override.manual and now < self.override.expires_at:
-            return
-        name = ctx.command.qualified_name
-        admin = one_line(ctx.author.display_name)[:40]
-        command = f"/{slash_name(ctx.command)}" if getattr(ctx, "interaction", None) else f"r.{name}"
-        self.override = ActivityOverride(
-            status_text(f"👑 {admin} usou {command}!"),
-            now + ADMIN_REACTION_SECONDS,
-        )
-
     @commands.command(cls=DualCommand, aliases=["atividade", "status"],
                       help="Administrador: r.activity <texto de até 128 caracteres> por 5 minutos. Use reset para retomar a rotação.")
     @commands.has_permissions(administrator=True)
