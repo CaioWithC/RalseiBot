@@ -6,6 +6,7 @@ import re
 import aiohttp
 import nextcord
 from nextcord.ext import commands
+from cogs.command_support import DualCommand
 
 log = logging.getLogger(__name__)
 
@@ -197,7 +198,7 @@ class AI(commands.Cog):
                         else:
                             await message.channel.send(chunk)
 
-    @commands.command(name="clearmemory", aliases=["limparmemoria", "esquecer"], help="Limpa a memória de conversa do Ralsei neste canal.")
+    @commands.command(cls=DualCommand, name="clearmemory", aliases=["limparmemoria", "esquecer"], help="Limpa a memória de conversa do Ralsei neste canal.")
     async def clear_memory(self, ctx: commands.Context):
         self.channel_memory.pop(ctx.channel.id, None)
         await ctx.send("Minha memória deste canal foi limpa! Podemos começar um novo assunto. 🍰")

@@ -127,15 +127,15 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_missions_share_progress_and_claims_across_prefix_and_slash(self):
         await self.slash("daily")
-        await self.slash("work")
-        ctx = await self.prefix_context("r.freelas")
+        await self.slash("work", vaga="caixa")
+        ctx = await self.prefix_context("r.freelas redacao")
         await self.bot.invoke(ctx)
         self.assertFalse(ctx.command_failed)
         statuses, _ = self.db.mission_status(self.author.id)
-        self.assertEqual([item["progress"] for item in statuses], [1, 1, 1, 0])
+        self.assertEqual([item["progress"] for item in statuses], [1, 1, 1])
         balance = self.db.balance(self.author.id)
         viewed = await self.slash("missions")
-        self.assertEqual(len(viewed.sent[-1]["embed"].fields), 4)
+        self.assertEqual(len(viewed.sent[-1]["embed"].fields), 3)
         ctx = await self.prefix_context("r.missoes claim")
         await self.bot.invoke(ctx)
         self.assertIn("7,500", ctx.send.call_args.args[0])
@@ -336,7 +336,7 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("10,000", balance_text)
         with patch("cogs.economy.random.randint", return_value=5000):
             await self.slash("daily")
-            await self.slash("work")
+            await self.slash("work", vaga="caixa")
         self.assertEqual(self.db.balance(self.author.id), 20_000)
         result = await self.slash("daily")
         self.assertIn("diária", result.sent[0]["content"])
@@ -933,11 +933,11 @@ class SlashCommandTests(unittest.IsolatedAsyncioTestCase):
         bal_res = await self.slash("balance", guild=False)
         self.assertIn("Saldo atual", bal_res.sent[0]["embed"].title)
 
-        work_res = await self.slash("work", guild=False)
+        work_res = await self.slash("work", vaga="caixa", guild=False)
         self.assertIn("Trabalho concluído", work_res.sent[0]["embed"].title)
 
         self.seconds += 7200
-        free_res = await self.slash("freelance", guild=False)
+        free_res = await self.slash("freelance", vaga="redacao", guild=False)
         self.assertIn("Freelance concluído", free_res.sent[0]["embed"].title)
 
         slots_res = await self.slash("slots", amount="100", guild=False)

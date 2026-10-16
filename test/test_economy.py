@@ -132,26 +132,58 @@ class PaymentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(custom_embed.color.value, 0x123456)
 
     async def test_work_and_freelance_send_money_embed(self):
-        cog = Economy(None)
+        cog = Economy(None, storage=self.db)
         sender = SimpleNamespace(id=1, mention="<@1>", display_name="Sender", bot=False)
-        ctx = SimpleNamespace(author=sender, send=AsyncMock())
+        ctx = SimpleNamespace(author=sender, send=AsyncMock(), command=None)
 
-        with patch("cogs.economy.database", self.db), patch("cogs.economy.random.randint", return_value=25000):
-            await Economy.work.callback(cog, ctx)
+        # 1. Work menu display
+        await Economy.work.callback(cog, ctx)
         ctx.send.assert_awaited_once()
         embed = ctx.send.call_args.kwargs["embed"]
-        self.assertEqual(embed.title, "💼 Trabalho concluído")
-        self.assertIn("25,000 D$", embed.description)
+        view = ctx.send.call_args.kwargs["view"]
+        self.assertIn("Mercado de Trabalho", embed.title)
         self.assertEqual(embed.color.value, 0x77E5BC)
 
+        # 2. Select work from view
+        view.message = SimpleNamespace(edit=AsyncMock())
+        interaction = SimpleNamespace(
+            user=sender, message=view.message,
+            response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+            followup=SimpleNamespace(send=AsyncMock())
+        )
+        with patch("cogs.economy.random.randint", return_value=25000):
+            await view.choose_job(interaction, "caixa")
+
+        view.message.edit.assert_awaited_once()
+        result_embed = view.message.edit.call_args.kwargs["embed"]
+        self.assertIn("Trabalho concluído", result_embed.title)
+        self.assertIn("25,000 D$", result_embed.description)
+        self.assertEqual(result_embed.color.value, 0x77E5BC)
+
+        # 3. Freelance menu display
         ctx.send.reset_mock()
-        with patch("cogs.economy.database", self.db), patch("cogs.economy.random.randint", return_value=500):
-            await Economy.freelance.callback(cog, ctx)
+        await Economy.freelance.callback(cog, ctx)
         ctx.send.assert_awaited_once()
-        embed = ctx.send.call_args.kwargs["embed"]
-        self.assertEqual(embed.title, "🧩 Freelance concluído")
-        self.assertIn("500 D$", embed.description)
-        self.assertEqual(embed.color.value, 0x77E5BC)
+        free_embed = ctx.send.call_args.kwargs["embed"]
+        free_view = ctx.send.call_args.kwargs["view"]
+        self.assertIn("Painel de Freelance", free_embed.title)
+        self.assertEqual(free_embed.color.value, 0x77E5BC)
+
+        # 4. Select freelance from view
+        free_view.message = SimpleNamespace(edit=AsyncMock())
+        free_interaction = SimpleNamespace(
+            user=sender, message=free_view.message,
+            response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+            followup=SimpleNamespace(send=AsyncMock())
+        )
+        with patch("cogs.economy.random.randint", return_value=500):
+            await free_view.choose_job(free_interaction, "redacao")
+
+        free_view.message.edit.assert_awaited_once()
+        free_result_embed = free_view.message.edit.call_args.kwargs["embed"]
+        self.assertIn("Freelance concluído", free_result_embed.title)
+        self.assertIn("500 D$", free_result_embed.description)
+        self.assertEqual(free_result_embed.color.value, 0x77E5BC)
 
 
 if __name__ == "__main__":

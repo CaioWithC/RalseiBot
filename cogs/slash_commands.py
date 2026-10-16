@@ -232,13 +232,20 @@ class SlashCommands(commands.Cog):
 
     @nextcord.slash_command(name="work", description="Trabalhe para ganhar DarkMoney a cada 2 horas.",
                             integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
-    async def work(self, interaction: nextcord.Interaction):
-        await self.invoke(interaction, "work")
+    async def work(self, interaction: nextcord.Interaction,
+                   vaga: str = nextcord.SlashOption(description="Nome ou código da vaga (opcional; omita para abrir o menu).", required=False)):
+        await self.invoke(interaction, "work", vaga=vaga)
 
     @nextcord.slash_command(name="freelance", description="Faça um 'freelance' para ganhar DarkMoney a cada 10 minutos.",
                             integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
-    async def freelance(self, interaction: nextcord.Interaction):
-        await self.invoke(interaction, "freelance")
+    async def freelance(self, interaction: nextcord.Interaction,
+                        vaga: str = nextcord.SlashOption(description="Nome ou código do bico freelance (opcional; omita para abrir o menu).", required=False)):
+        await self.invoke(interaction, "freelance", vaga=vaga)
+
+    @nextcord.slash_command(name="clearmemory", description="Limpa a memória de conversa do Ralsei neste canal.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def clearmemory(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "clearmemory")
 
     @nextcord.slash_command(name="rob", description="Roube DarkMoney de outro membro a cada 60 minutos.",
                             integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)

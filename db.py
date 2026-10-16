@@ -14,6 +14,7 @@ from sqlalchemy.types import TypeDecorator
 
 from cogs.mission_rules import MISSIONS
 from cogs.quiz_rules import normalize_answer
+from cogs.job_rules import calculate_level
 
 Base = declarative_base()
 MAX_BALANCE = 9_000_000_000_000_000
@@ -103,6 +104,15 @@ class MissionProgress(Base):
     day_start = Column(Integer, nullable=False)
     progress = Column(Integer, nullable=False, default=0)
     claimed = Column(Integer, nullable=False, default=0)
+
+
+class JobExperience(Base):
+    __tablename__ = "job_experiences"
+    discord_id = Column(String, primary_key=True)
+    category = Column(String, primary_key=True)
+    job_id = Column(String, primary_key=True)
+    xp = Column(Integer, nullable=False, default=0)
+    level = Column(Integer, nullable=False, default=1)
 
 
 class SocialProfile(Base):
@@ -360,6 +370,62 @@ class Database:
             self.credit(user, reward)
             self.advance_mission(session, discord_id, job, now)
             return user.balance
+
+    def get_job_experience(self, discord_id, category, job_id):
+        with self.transaction() as session:
+            row = session.get(JobExperience, (str(discord_id), category, job_id))
+            if row is None:
+                return 0, 1
+            return row.xp, row.level
+
+    def get_user_job_stats(self, discord_id, category):
+        with self.transaction() as session:
+            rows = session.scalars(
+                select(JobExperience).where(
+                    JobExperience.discord_id == str(discord_id),
+                    JobExperience.category == category,
+                )
+            ).all()
+            return {row.job_id: (row.xp, row.level) for row in rows}
+
+    def record_job_work(self, discord_id, category, job_id, reward, xp_gain=1, now=None):
+        if category not in {"work", "freelance"}:
+            raise EconomyError("Trabalho inválido.")
+        self.positive(reward)
+        with self.transaction() as session:
+            now = int(time.time() if now is None else now)
+            user = self.user(session, discord_id)
+            self.credit(user, reward)
+            self.advance_mission(session, discord_id, category, now)
+
+            row = session.get(JobExperience, (str(discord_id), category, job_id))
+            old_xp = row.xp if row else 0
+            old_level = row.level if row else 1
+            new_xp = old_xp + xp_gain
+            new_level = calculate_level(new_xp)
+
+            if row is None:
+                row = JobExperience(
+                    discord_id=str(discord_id),
+                    category=category,
+                    job_id=job_id,
+                    xp=new_xp,
+                    level=new_level,
+                )
+                session.add(row)
+            else:
+                row.xp = new_xp
+                row.level = new_level
+
+            return {
+                "balance": user.balance,
+                "old_xp": old_xp,
+                "new_xp": new_xp,
+                "old_level": old_level,
+                "new_level": new_level,
+                "leveled_up": new_level > old_level,
+                "reward": reward,
+            }
 
     def daily(self, discord_id, reward, now=None):
         self.positive(reward)
