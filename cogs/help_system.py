@@ -37,6 +37,7 @@ HELP_CATEGORIES = {
             "divorce",
             "ship",
             "rich",
+            "userinfo",
         ],
     },
     "roleplay": {

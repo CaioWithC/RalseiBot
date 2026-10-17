@@ -393,6 +393,13 @@ class SlashCommands(commands.Cog):
                      action: str = nextcord.SlashOption(description="Ação especial (ex: desvincular).", choices=["desvincular"], required=False)):
         await self.invoke(interaction, "namemc", nick=nick, member=member, action=action)
 
+    @nextcord.slash_command(name="userinfo", description="Veja informações detalhadas sobre um usuário.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def userinfo(self, interaction: nextcord.Interaction,
+                       member: typing.Union[nextcord.Member, nextcord.User] = nextcord.SlashOption(
+                           description="Usuário para consultar; omita para ver o seu.", required=False)):
+        await self.invoke(interaction, "userinfo", member=member)
+
 
 def setup(bot):
     bot.add_cog(SlashCommands(bot))
