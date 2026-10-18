@@ -20,10 +20,9 @@ SYSTEM_PROMPT = (
     "Se o usuário te perguntar de forma ofensiva ou inapropriada, você pode responder do mesmo jeito dele"
     "Se a conversa tiver descontraida ou sem nexo, você deve responder de forma descontraida e sem nexo também."
     "Se o usuário pedir para você se comportar como um personagem, você deve seguir o papel do personagem."
-    "Se o usuário falar 'seu dono' perguntado quem é, você deve responder 'meu dono é o Caio, ele me criou e me mantém funcionando'."
+    "Se o usuário falar 'seu dono' perguntado quem é, você deve responder algo do tipo 'meu dono é o Caio, ele me criou e me mantém funcionando'."
     "Você funciona da seguinte forma: você tem varias funcionalidades, você tem comandos de economia, comandos de jogos, comandos de música, comandos de perfil, comandos de roleplay, comandos de confissões, comandos de quiz, comandos de uno, comandos de moderação e comandos de inteligência artificial;"
     "Se o usuário te perguntar algo besta ou sem sentido, você deve responder do jeito que o usuário perguntou, sem corrigir ou mudar o que ele disse."
-    "Se o usuário tem o nome de usuário 'Matt', você deve falar no final da mensagem que o Caio o ama muito."
 )
 
 # Lista de modelos em ordem de prioridade. Se o primeiro sofrer rate limit (429), tenta os próximos.
@@ -59,12 +58,12 @@ class AI(commands.Cog):
             or os.getenv("OPENROUTER_API_KEY")
         )
 
-    async def generate_response(self, channel_id: int, user_entry: dict) -> str | None:
-        """Envia o histórico do canal e a nova mensagem para a API do Gemini."""
+    async def generate_completion(self, messages_payload: list[dict]) -> tuple[str | None, dict | None]:
+        """Envia um payload de mensagens para a API de IA com suporte a fallback de modelos."""
         api_key = self.get_api_key()
         if not api_key:
             log.error("Chave da API não configurada no .env (gemini_api_key ou openrouter_api_key).")
-            return "Desculpe, a minha chave de inteligência artificial não foi configurada no `.env` ainda!"
+            return "Desculpe, a minha chave de inteligência artificial não foi configurada no `.env` ainda!", None
 
         session = await self.get_session()
         headers = {
@@ -73,10 +72,6 @@ class AI(commands.Cog):
             "HTTP-Referer": "https://github.com/RalseiBot",
             "X-Title": "RalseiBot",
         }
-
-        # Constrói o histórico completo para a API
-        current_history = self.channel_memory[channel_id]
-        messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}] + current_history + [user_entry]
 
         # Remove duplicatas consecutivas de modelos na lista de tentativas
         models_to_try = []
@@ -106,22 +101,7 @@ class AI(commands.Cog):
                         final_text = cleaned_content if cleaned_content else content
 
                         if final_text:
-                            # Salva na memória do canal
-                            self.channel_memory[channel_id].append(user_entry)
-                            assistant_entry = {
-                                "role": "assistant",
-                                "content": final_text,
-                            }
-                            # Preserva reasoning_details se fornecido pelo modelo
-                            if msg_data.get("reasoning_details"):
-                                assistant_entry["reasoning_details"] = msg_data["reasoning_details"]
-                            self.channel_memory[channel_id].append(assistant_entry)
-
-                            # Mantém apenas as últimas mensagens para não exceder limites
-                            if len(self.channel_memory[channel_id]) > MAX_MEMORY_MESSAGES:
-                                self.channel_memory[channel_id] = self.channel_memory[channel_id][-MAX_MEMORY_MESSAGES:]
-
-                            return final_text
+                            return final_text, msg_data.get("reasoning_details")
                     elif resp.status == 429:
                         log.warning("Modelo %s retornou 429 (rate-limit). Tentando fallback...", model)
                         last_error = "rate_limit"
@@ -135,8 +115,91 @@ class AI(commands.Cog):
                 last_error = str(e)
 
         if last_error == "rate_limit":
-            return "Estou recebendo muitas mensagens no momento! Pode esperar alguns segundinhos e tentar de novo? 🍰"
-        return "Desculpe, tive um probleminha para pensar agora... podemos tentar de novo em instantes?"
+            return "Estou recebendo muitas mensagens no momento! Pode esperar alguns segundinhos e tentar de novo? 🍰", None
+        return "Desculpe, tive um probleminha para pensar agora... podemos tentar de novo em instantes?", None
+
+    async def generate_response(self, channel_id: int, user_entry: dict) -> str | None:
+        """Envia o histórico do canal e a nova mensagem para a API do Gemini."""
+        current_history = self.channel_memory[channel_id]
+        messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}] + current_history + [user_entry]
+
+        final_text, reasoning_details = await self.generate_completion(messages_payload)
+        if final_text and not final_text.startswith("Desculpe,") and not final_text.startswith("Estou recebendo muitas"):
+            self.channel_memory[channel_id].append(user_entry)
+            assistant_entry = {
+                "role": "assistant",
+                "content": final_text,
+            }
+            if reasoning_details:
+                assistant_entry["reasoning_details"] = reasoning_details
+            self.channel_memory[channel_id].append(assistant_entry)
+
+            # Mantém apenas as últimas mensagens para não exceder limites
+            if len(self.channel_memory[channel_id]) > MAX_MEMORY_MESSAGES:
+                self.channel_memory[channel_id] = self.channel_memory[channel_id][-MAX_MEMORY_MESSAGES:]
+
+        return final_text
+
+    async def explain_tarot(
+        self,
+        question: str | None,
+        cards_data: list[tuple[dict, bool]],
+        author_name: str = "Viajante",
+    ) -> str:
+        """Usa a IA para sintetizar e explicar as cartas tiradas na leitura de tarot."""
+        is_three_spread = len(cards_data) == 3
+        positions = ["Passado / Origem", "Presente / Desafio", "Futuro / Conselho"] if is_three_spread else ["Carta do Dia"]
+
+        cards_desc = []
+        for idx, (card, is_rev) in enumerate(cards_data):
+            pos_label = positions[idx] if idx < len(positions) else f"Carta {idx + 1}"
+            orient = "Invertida 🔄 (energia bloqueada ou reflexão interna)" if is_rev else "Em pé ☀️ (energia manifestada e direta)"
+            keywords = card.get("keywords_reversed" if is_rev else "keywords_upright", "")
+            waite = card.get("div_mean_rev_en" if is_rev else "div_mean_en", "")
+
+            desc_line = (
+                f"• Posição: {pos_label}\n"
+                f"  Carta: {card.get('name_pt', card.get('name_en'))} ({card.get('name_en')}) [{orient}]\n"
+                f"  Palavras-chave: {keywords}\n"
+                f"  Significado tradicional A.E. Waite: {waite}"
+            )
+            cards_desc.append(desc_line)
+
+        cards_text = "\n\n".join(cards_desc)
+
+        tarot_system_prompt = (
+            "Você é o Ralsei, atuando como um sábio leitor de tarot."
+            "Você fala português brasileiro e tem um tom acolhedor, gentil, intuitivo e encorajador."
+            "Interprete as cartas do baralho Rider-Waite-Smith (1910) com sabedoria, sem inventar fatos ou ser excessivamente formal."
+            "Não use muitos emojis, apenas alguns para dar leveza."
+        )
+
+        if question:
+            user_content = (
+                f"O consulente {author_name} perguntou às cartas do tarot:\n"
+                f"“{question}”\n\n"
+                f"Cartas tiradas na mesa:\n"
+                f"{cards_text}\n\n"
+                f"Faça um resumo e interpretação fluida de 2 a 4 parágrafos curtos:\n"
+                f"1. Conecte as cartas diretamente à pergunta de {author_name}, explicando a narrativa do Passado para o Presente e o Futuro.\n"
+                f"2. Explique os desafios revelados e o conselho prático final para que {author_name} tome as melhores decisões.\n"
+                f"Resuma em poucas palavras, de forma clara, direta e humana, como se estivesse conversando com {author_name}."
+            )
+        else:
+            user_content = (
+                f"O consulente {author_name} tirou a Carta do Dia:\n"
+                f"{cards_text}\n\n"
+                f"Faça uma interpretação e conselho diário de 2 a 3 parágrafos curtos sobre a energia de hoje para {author_name}, "
+                f"trazendo clareza, incentivo e uma recomendação prática para o dia."
+            )
+
+        messages = [
+            {"role": "system", "content": tarot_system_prompt},
+            {"role": "user", "content": user_content},
+        ]
+
+        final_text, _ = await self.generate_completion(messages)
+        return final_text or "Não foi possível gerar o resumo com a IA no momento."
 
     @commands.Cog.listener()
     async def on_message(self, message: nextcord.Message):

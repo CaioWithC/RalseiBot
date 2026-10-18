@@ -400,6 +400,14 @@ class SlashCommands(commands.Cog):
                            description="Usuário para consultar; omita para ver o seu.", required=False)):
         await self.invoke(interaction, "userinfo", member=member)
 
+    @nextcord.slash_command(name="tarot", description="Leitura de tarot com cartas Rider-Waite-Smith e mesa ilustrada.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def tarot(self, interaction: nextcord.Interaction,
+                    pergunta: str = nextcord.SlashOption(
+                        description="Sua pergunta para as cartas (deixe em branco para a Carta do Dia).",
+                        required=False)):
+        await self.invoke(interaction, "tarot", pergunta=pergunta)
+
 
 def setup(bot):
     bot.add_cog(SlashCommands(bot))

@@ -38,6 +38,7 @@ HELP_CATEGORIES = {
             "ship",
             "rich",
             "userinfo",
+            "tarot",
         ],
     },
     "roleplay": {
