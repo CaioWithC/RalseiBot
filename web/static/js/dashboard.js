@@ -2,14 +2,20 @@
  * RalseiBot Dashboard - Interactive Client-side Script
  */
 
-document.addEventListener('DOMContentLoaded', () => {
+function initAll() {
   try { initToasts(); } catch (e) { console.error('Error in initToasts:', e); }
   try { initServerSearch(); } catch (e) { console.error('Error in initServerSearch:', e); }
   try { initTabs(); } catch (e) { console.error('Error in initTabs:', e); }
   try { initCommandFilters(); } catch (e) { console.error('Error in initCommandFilters:', e); }
   try { initCategoryToggles(); } catch (e) { console.error('Error in initCategoryToggles:', e); }
   try { initFormSaves(); } catch (e) { console.error('Error in initFormSaves:', e); }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAll);
+} else {
+  initAll();
+}
 
 // ==========================================================================
 // TOAST NOTIFICATIONS & ALERTS
@@ -157,8 +163,10 @@ function initTabs() {
     tabPanes.forEach(p => {
       if (p.id === targetId) {
         p.classList.add('active');
+        p.style.display = 'block';
       } else {
         p.classList.remove('active');
+        p.style.display = 'none';
       }
     });
 
@@ -166,6 +174,8 @@ function initTabs() {
       history.replaceState(null, null, `#${targetId}`);
     } catch (e) {}
   }
+
+  window.switchTab = switchTab;
 
   tabButtons.forEach(btn => {
     btn.addEventListener('click', (e) => {

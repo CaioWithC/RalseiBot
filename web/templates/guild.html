@@ -37,19 +37,19 @@
 
   <!-- Navigation Tabs -->
   <div class="tabs-nav">
-    <button type="button" class="tab-btn active" data-tab="tab-general">
+    <button type="button" class="tab-btn active" data-tab="tab-general" onclick="switchTab('tab-general')">
       <i class="fa-solid fa-sliders"></i> Geral & Prefixo
     </button>
-    <button type="button" class="tab-btn" data-tab="tab-commands">
+    <button type="button" class="tab-btn" data-tab="tab-commands" onclick="switchTab('tab-commands')">
       <i class="fa-solid fa-terminal"></i> Comandos & Módulos
     </button>
-    <button type="button" class="tab-btn" data-tab="tab-confessions">
+    <button type="button" class="tab-btn" data-tab="tab-confessions" onclick="switchTab('tab-confessions')">
       <i class="fa-solid fa-envelope-open-text"></i> Confissões
     </button>
-    <button type="button" class="tab-btn" data-tab="tab-tickets">
+    <button type="button" class="tab-btn" data-tab="tab-tickets" onclick="switchTab('tab-tickets')">
       <i class="fa-solid fa-ticket"></i> Tickets
     </button>
-    <button type="button" class="tab-btn" data-tab="tab-quiz">
+    <button type="button" class="tab-btn" data-tab="tab-quiz" onclick="switchTab('tab-quiz')">
       <i class="fa-solid fa-brain"></i> Quiz Automático
     </button>
   </div>
@@ -147,9 +147,9 @@
       </div>
 
       <div class="cmd-category-filters">
-        <button type="button" class="cmd-filter-pill active" data-cat="all">Todos</button>
+        <button type="button" class="cmd-filter-pill active" data-cat="all" onclick="filterCategory('all', this)">Todos</button>
         {% for cat_key, cat_data in categories_info.items() %}
-          <button type="button" class="cmd-filter-pill" data-cat="{{ cat_key }}">
+          <button type="button" class="cmd-filter-pill" data-cat="{{ cat_key }}" onclick="filterCategory('{{ cat_key }}', this)">
             {{ cat_data.emoji }} {{ cat_data.label }}
           </button>
         {% endfor %}
@@ -381,5 +381,87 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+window.switchTab = function(targetId) {
+  if (!targetId) return;
+  var targetPane = document.getElementById(targetId);
+  if (!targetPane) return;
+
+  var tabButtons = document.querySelectorAll('.tab-btn');
+  var tabPanes = document.querySelectorAll('.tab-pane');
+
+  tabButtons.forEach(function(b) {
+    if (b.getAttribute('data-tab') === targetId) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+
+  tabPanes.forEach(function(p) {
+    if (p.id === targetId) {
+      p.classList.add('active');
+      p.style.display = 'block';
+    } else {
+      p.classList.remove('active');
+      p.style.display = 'none';
+    }
+  });
+
+  try {
+    history.replaceState(null, null, '#' + targetId);
+  } catch (e) {}
+};
+
+window.filterCategory = function(catId, btnEl) {
+  if (btnEl) {
+    document.querySelectorAll('.cmd-filter-pill').forEach(function(p) { p.classList.remove('active'); });
+    btnEl.classList.add('active');
+  }
+  var searchInput = document.getElementById('command-search');
+  var query = (searchInput && searchInput.value ? searchInput.value : '').trim().toLowerCase();
+  
+  document.querySelectorAll('.category-block').forEach(function(block) {
+    var blockCat = block.getAttribute('data-cat-id');
+    var matchesCategory = (catId === 'all' || catId === blockCat);
+
+    var visibleInBlock = 0;
+    block.querySelectorAll('.command-card').forEach(function(card) {
+      var name = card.getAttribute('data-cmd-name') || '';
+      var descEl = card.querySelector('.cmd-desc');
+      var desc = descEl ? descEl.textContent.toLowerCase() : '';
+      var matchesQuery = query === '' || name.indexOf(query) !== -1 || desc.indexOf(query) !== -1;
+      if (matchesCategory && matchesQuery) {
+        card.style.display = 'flex';
+        visibleInBlock++;
+      } else {
+        card.style.display = 'none';
+      }
+    });
+
+    block.style.display = (matchesCategory && (visibleInBlock > 0 || query === '')) ? 'block' : 'none';
+  });
+};
+
+// Check URL hash immediately or on load
+(function() {
+  function checkHash() {
+    if (window.location.hash) {
+      var hashId = window.location.hash.substring(1);
+      if (document.getElementById(hashId)) {
+        window.switchTab(hashId);
+      }
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkHash);
+  } else {
+    checkHash();
+  }
+})();
+</script>
 {% endblock %}
 

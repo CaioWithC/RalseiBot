@@ -201,6 +201,28 @@ class DiscordPermissionsAndWebDashboardTests(unittest.TestCase):
             self.assertEqual(res.status_code, 200)
             mock_save.assert_called_with("123", prefix="r.")
 
+    def test_guild_view_renders_tabs_and_switch_script(self):
+        app = create_app()
+        app.config["TESTING"] = True
+        client = app.test_client()
+
+        with client.session_transaction() as sess:
+            sess["user"] = {"id": "123", "username": "admin"}
+
+        with patch("web.routes.user_can_manage_guild", return_value=True), \
+             patch("web.routes.discord_api.get_bot_guild_ids", return_value={"123"}), \
+             patch("web.routes.discord_api.get_guild_channels", return_value={"text_channels": [], "categories": []}):
+            res = client.get("/guild/123")
+            self.assertEqual(res.status_code, 200)
+            html = res.data.decode("utf-8")
+            self.assertIn("switchTab('tab-general')", html)
+            self.assertIn("switchTab('tab-commands')", html)
+            self.assertIn("switchTab('tab-confessions')", html)
+            self.assertIn("switchTab('tab-tickets')", html)
+            self.assertIn("switchTab('tab-quiz')", html)
+            self.assertIn("window.switchTab = function", html)
+            self.assertIn("window.filterCategory = function", html)
+
     def test_vercel_serverless_entrypoint_and_config(self):
         # Verify api.index exports a valid WSGI Flask app
         from api.index import app as vercel_app

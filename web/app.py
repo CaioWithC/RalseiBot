@@ -24,6 +24,7 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = config.SECRET_KEY
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["JSON_AS_ASCII"] = False
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
     # Trust proxy headers on Vercel so HTTPS schemes, ports, and hosts are recognized correctly
     app.wsgi_app = ProxyFix(
