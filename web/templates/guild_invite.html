@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Adicionar RalseiBot · {{ guild_name }}{% endblock %}
+
+{% block content %}
+<div class="invite-container">
+  <div class="invite-card">
+    <div class="invite-guild-icon">
+      {% if guild_icon_url %}
+        <img src="{{ guild_icon_url }}" alt="{{ guild_name }}">
+      {% else %}
+        <div class="guild-icon-placeholder">{{ guild_name[:2]|upper }}</div>
+      {% endif %}
+    </div>
+
+    <h2>RalseiBot ainda não está em <strong>{{ guild_name }}</strong></h2>
+    <p>Para poder personalizar comandos, prefixo e canais, adicione o bot ao servidor primeiro com permissões de administrador.</p>
+
+    <div class="invite-actions">
+      <a href="{{ invite_url }}" target="_blank" class="btn-primary btn-large">
+        <i class="fa-brands fa-discord"></i> Adicionar Ralsei ao Servidor
+      </a>
+      <a href="{{ url_for('dashboard.dashboard_view') }}" class="btn-secondary">
+        <i class="fa-solid fa-arrow-left"></i> Voltar aos Servidores
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

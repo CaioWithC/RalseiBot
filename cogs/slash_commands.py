@@ -408,6 +408,14 @@ class SlashCommands(commands.Cog):
                         required=False)):
         await self.invoke(interaction, "tarot", pergunta=pergunta)
 
+    @nextcord.slash_command(name="anilist", description="Veja o perfil e estatísticas de um usuário no AniList.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def anilist(self, interaction: nextcord.Interaction,
+                      usuario: str = nextcord.SlashOption(description="Nome de usuário ou link do AniList.", required=False),
+                      membro: nextcord.User = nextcord.SlashOption(description="Ver a conta AniList de outro membro do Discord.", required=False),
+                      acao: str = nextcord.SlashOption(description="Ação para sua conta.", choices=["vincular", "desvincular"], required=False)):
+        await self.invoke(interaction, "anilist", usuario=usuario, membro=membro, acao=acao)
+
 
 def setup(bot):
     bot.add_cog(SlashCommands(bot))

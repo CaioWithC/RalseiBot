@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Início · RalseiBot Dashboard{% endblock %}
+
+{% block content %}
+<section class="hero-section">
+  <div class="hero-glow"></div>
+  <div class="hero-container">
+    <div class="hero-badge">
+      <i class="fa-solid fa-sparkles"></i> Painel de Controle Oficial
+    </div>
+    <h1 class="hero-title">
+      Configure o <span class="highlight">RalseiBot</span><br>para a sua comunidade
+    </h1>
+    <p class="hero-description">
+      Gerencie servidores onde você é <strong>Dono</strong> ou <strong>Administrador</strong>. 
+      Personalize prefixo, ative ou desative comandos específicos, configure canais de confissões, 
+      sistema de tickets e quiz interativo em tempo real.
+    </p>
+
+    <div class="hero-actions">
+      {% if session.get('user') %}
+        <a href="{{ url_for('dashboard.dashboard_view') }}" class="btn-primary">
+          <i class="fa-solid fa-gauge-high"></i> Acessar Meus Servidores
+        </a>
+      {% else %}
+        <a href="{{ url_for('dashboard.login') }}" class="btn-primary btn-discord">
+          <i class="fa-brands fa-discord"></i> Entrar com Discord
+        </a>
+      {% endif %}
+      <a href="{{ invite_url }}" target="_blank" class="btn-secondary">
+        <i class="fa-solid fa-plus"></i> Convidar Ralsei para o Servidor
+      </a>
+    </div>
+
+    <!-- Live Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <span class="stat-number">{{ bot_guilds_count }}</span>
+        <span class="stat-label">Servidores Conectados</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-number">53+</span>
+        <span class="stat-label">Comandos Disponíveis</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-number">100%</span>
+        <span class="stat-label">Personalizável</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-number"><i class="fa-solid fa-shield-halved" style="color: var(--ralsei-mint);"></i></span>
+        <span class="stat-label">Controle de Administrador</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features Grid -->
+<section class="features-section">
+  <div class="section-header">
+    <h2 class="section-title">Tudo o que você precisa em um só lugar</h2>
+    <p class="section-subtitle">Recursos modernos e intuitivos para manter seu servidor seguro e dinâmico.</p>
+  </div>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fa-solid fa-shield-halved"></i></div>
+      <h3>Permissão Administrativa</h3>
+      <p>Apenas donos e administradores com a permissão nativa do Discord podem gerenciar e alterar configurações dos servidores.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fa-solid fa-terminal"></i></div>
+      <h3>Prefixo Personalizado</h3>
+      <p>Escolha o prefixo que preferir para o seu servidor (como <code>!</code>, <code>?</code>, <code>r.</code> ou outro) sem conflitos com outros bots.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fa-solid fa-sliders"></i></div>
+      <h3>Ativação de Comandos</h3>
+      <p>Ligue ou desligue módulos inteiros ou comandos individuais (como <code>rob</code>, apostas de cassino, roleplay ou moderação).</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fa-solid fa-envelope-open-text"></i></div>
+      <h3>Canal de Confissões</h3>
+      <p>Configure o canal público de confissões anônimas e o canal privado de moderação com logs de auditoria dos autores.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fa-solid fa-ticket"></i></div>
+      <h3>Central de Tickets</h3>
+      <p>Defina a categoria de atendimento para criação de canais de suporte privados com os comandos <code>/ticket</code>.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fa-solid fa-brain"></i></div>
+      <h3>Quiz com DarkMoney</h3>
+      <p>Ative rodadas de perguntas automáticas com premiações em dinheiro do bot e moderação de perguntas sugeridas.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}
+

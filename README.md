@@ -17,6 +17,43 @@ No Discord Developer Portal, habilite **Message Content Intent** e **Server Memb
 
 Reinicie o bot depois de atualizar os arquivos. O Nextcord registra e atualiza os comandos slash globais automaticamente ao conectar, sem comando manual de sincronização. A lista pode levar algum tempo para aparecer no Discord. `r.help` e `/help` listam os dois formatos; `r.help mines` e `/help command:mines` mostram a ajuda de um jogo.
 
+## Painel de Controle Web (Dashboard)
+
+O RalseiBot conta com um site dedicado para que donos e administradores configurem seus servidores:
+
+- **Controle de Acesso**: Apenas donos e administradores com a permissão nativa do Discord podem gerenciar cada servidor.
+- **Prefixo Personalizado**: Altere o prefixo de comandos de texto por servidor (ex: `!`, `?`, `.`, mantendo `r.` como alternativa).
+- **Módulos & Comandos**: Ative ou desative comandos específicos (como `rob`, apostas de cassino, roleplay) ou categorias inteiras.
+- **Confissões**: Escolha o canal público de envio e o canal privado de moderação.
+- **Tickets**: Defina a categoria de atendimento privado para a staff.
+- **Quiz Automático**: Configure canal das rodadas, canal de aprovação de perguntas e recompensa em DarkMoney.
+
+### Execução Local:
+```powershell
+python run_dashboard.py
+# Ou clique duas vezes em start-dashboard.bat
+```
+O painel estará disponível em `http://localhost:5000`.
+
+### Deploy no Vercel (`https://ralseibot.vercel.app/`):
+O projeto já conta com [`vercel.json`](vercel.json) e [`api/index.py`](api/index.py) pré-configurados para a Vercel.
+
+1. **Configurar o Discord Developer Portal**:
+   - Em [Discord Developer Portal](https://discord.com/developers/applications) > Sua Aplicação > **OAuth2** > **Redirects**:
+   - Adicione o link: `https://ralseibot.vercel.app/callback` (e `http://localhost:5000/callback` para testes locais) e clique em **Save Changes**.
+
+2. **Variáveis de Ambiente na Vercel** (Settings > Environment Variables):
+   - `DISCORD_TOKEN`: Seu token de bot.
+   - `DISCORD_CLIENT_ID`: ID da aplicação Discord.
+   - `DISCORD_CLIENT_SECRET`: Client Secret obtido na aba OAuth2.
+   - `DISCORD_REDIRECT_URI`: `https://ralseibot.vercel.app/callback`
+   - `SECRET_KEY`: Uma chave secreta qualquer para a sessão Flask.
+   - *(Opcional)* `BOT_DATABASE_URL`: URL do banco de dados remoto (PostgreSQL/Supabase/Neon) se desejar compartilhar dados em tempo real com o processo do bot em outra máquina.
+
+3. **Publicar**:
+   - Conecte o repositório GitHub à Vercel ou execute `vercel --prod` pelo terminal.
+
+
 ## Comandos
 
 | Prefixo | Slash | Função |

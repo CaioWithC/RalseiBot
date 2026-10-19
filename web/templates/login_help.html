@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Configuração de Autenticação · RalseiBot{% endblock %}
+
+{% block content %}
+<div class="setup-container">
+  <div class="setup-card">
+    <div class="setup-header">
+      <div class="setup-icon"><i class="fa-brands fa-discord"></i></div>
+      <h2>Configurar Login com Discord (OAuth2)</h2>
+      <p>Para usar o login oficial do Discord, configure o <code>DISCORD_CLIENT_SECRET</code> no seu arquivo <code>.env</code>.</p>
+    </div>
+
+    <div class="setup-steps">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-info">
+          <h4>Acesse o Discord Developer Portal</h4>
+          <p>Abra o portal <a href="https://discord.com/developers/applications" target="_blank" rel="noopener">discord.com/developers/applications</a> e selecione a aplicação do seu bot.</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-info">
+          <h4>Copie o Client Secret e cadastre o Redirect URI</h4>
+          <p>No menu lateral <strong>OAuth2</strong> &gt; <strong>General</strong>:</p>
+          <ul>
+            <li>Clique em <strong>Reset Secret</strong> e copie o <code>Client Secret</code>.</li>
+            <li>Adicione em <strong>Redirects</strong> o endereço: <code>{{ redirect_uri }}</code> e salve.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-info">
+          <h4>Adicione ao seu arquivo .env</h4>
+          <pre><code>DISCORD_CLIENT_ID={{ client_id }}
+DISCORD_CLIENT_SECRET=seu_client_secret_aqui
+DISCORD_REDIRECT_URI={{ redirect_uri }}</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="setup-actions">
+      <div class="dev-bypass-box">
+        <h4><i class="fa-solid fa-flask"></i> Quer testar o painel imediatamente sem configurar o OAuth agora?</h4>
+        <p>Você pode entrar no <strong>Modo de Teste Local</strong> com permissão de administrador simulada para navegar por todos os servidores do bot e salvar configurações no banco de dados agora mesmo.</p>
+        <a href="{{ url_for('dashboard.dev_login') }}" class="btn-primary btn-large">
+          <i class="fa-solid fa-bolt"></i> Entrar em Modo de Demonstração / Teste Local
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

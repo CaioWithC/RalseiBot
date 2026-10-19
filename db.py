@@ -123,6 +123,7 @@ class SocialProfile(Base):
     background = Column(LargeBinary, nullable=True)
     pet = Column(String(100), nullable=True)
     namemc = Column(String(32), nullable=True)
+    anilist = Column(String(50), nullable=True)
 
 
 class ShipScore(Base):
@@ -218,6 +219,18 @@ class ChannelLock(Base):
     permissions = Column(String, nullable=False)
 
 
+class GuildSettings(Base):
+    __tablename__ = "guild_settings"
+    guild_id = Column(String, primary_key=True)
+    prefix = Column(String(10), default="r.", nullable=False)
+    disabled_commands = Column(String, default="[]", nullable=False)
+    disabled_categories = Column(String, default="[]", nullable=False)
+    mod_log_channel_id = Column(String, nullable=True)
+    welcome_channel_id = Column(String, nullable=True)
+    welcome_message = Column(String, nullable=True)
+    updated_at = Column(Integer, nullable=True)
+
+
 class Database:
     def __init__(self, url):
         self.engine = create_engine(url, connect_args={"timeout": 10})
@@ -227,11 +240,14 @@ class Database:
     def _ensure_schema(self):
         try:
             with self.engine.connect() as conn:
+                conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
                 columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(social_profiles)").fetchall()]
                 if columns and "pet" not in columns:
                     conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN pet VARCHAR(100)")
                 if columns and "namemc" not in columns:
                     conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN namemc VARCHAR(32)")
+                if columns and "anilist" not in columns:
+                    conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN anilist VARCHAR(50)")
         except Exception:
             pass
 
@@ -747,10 +763,11 @@ class Database:
             return {"discord_id": user.discord_id, "balance": user.balance, "rank": ahead + 1,
                     "color": profile.color, "about": profile.about, "background": profile.background,
                     "pet": getattr(profile, "pet", None),
-                    "namemc": getattr(profile, "namemc", None)}
+                    "namemc": getattr(profile, "namemc", None),
+                    "anilist": getattr(profile, "anilist", None)}
 
     def update_profile(self, discord_id, **changes):
-        if not changes or changes.keys() - {"color", "about", "background", "pet", "namemc"}:
+        if not changes or changes.keys() - {"color", "about", "background", "pet", "namemc", "anilist"}:
             raise EconomyError("Campo de perfil inválido.")
         with self.transaction() as session:
             self.user(session, discord_id)
@@ -1045,6 +1062,124 @@ class Database:
             row.winner_id, row.status = str(user_id), "won"
             return row.reward
 
+    def get_guild_settings(self, guild_id):
+        with self.transaction() as session:
+            row = session.get(GuildSettings, str(guild_id))
+            if row is None:
+                row = GuildSettings(guild_id=str(guild_id), prefix="r.", disabled_commands="[]", disabled_categories="[]")
+                session.add(row)
+                session.flush()
+            return {
+                "guild_id": str(row.guild_id),
+                "prefix": row.prefix or "r.",
+                "disabled_commands": json.loads(row.disabled_commands or "[]"),
+                "disabled_categories": json.loads(row.disabled_categories or "[]"),
+                "mod_log_channel_id": row.mod_log_channel_id,
+                "welcome_channel_id": row.welcome_channel_id,
+                "welcome_message": row.welcome_message,
+                "updated_at": row.updated_at,
+            }
 
-database = Database(os.getenv("BOT_DATABASE_URL", "sqlite:///" +
-                             (Path(__file__).parent / "bot.db").as_posix()))
+    def update_guild_settings(self, guild_id, **kwargs):
+        with self.transaction() as session:
+            row = session.get(GuildSettings, str(guild_id))
+            if row is None:
+                row = GuildSettings(guild_id=str(guild_id), prefix="r.", disabled_commands="[]", disabled_categories="[]")
+                session.add(row)
+            if "prefix" in kwargs and kwargs["prefix"] is not None:
+                clean_prefix = str(kwargs["prefix"]).strip()[:10]
+                row.prefix = clean_prefix if clean_prefix else "r."
+            if "disabled_commands" in kwargs and kwargs["disabled_commands"] is not None:
+                row.disabled_commands = json.dumps(list(kwargs["disabled_commands"]))
+            if "disabled_categories" in kwargs and kwargs["disabled_categories"] is not None:
+                row.disabled_categories = json.dumps(list(kwargs["disabled_categories"]))
+            if "mod_log_channel_id" in kwargs:
+                val = kwargs["mod_log_channel_id"]
+                row.mod_log_channel_id = str(val).strip() if val else None
+            if "welcome_channel_id" in kwargs:
+                val = kwargs["welcome_channel_id"]
+                row.welcome_channel_id = str(val).strip() if val else None
+            if "welcome_message" in kwargs:
+                val = kwargs["welcome_message"]
+                row.welcome_message = str(val).strip() if val else None
+            row.updated_at = int(time.time())
+            return {
+                "guild_id": str(row.guild_id),
+                "prefix": row.prefix or "r.",
+                "disabled_commands": json.loads(row.disabled_commands or "[]"),
+                "disabled_categories": json.loads(row.disabled_categories or "[]"),
+                "mod_log_channel_id": row.mod_log_channel_id,
+                "welcome_channel_id": row.welcome_channel_id,
+                "welcome_message": row.welcome_message,
+                "updated_at": row.updated_at,
+            }
+
+    def get_guild_prefix(self, guild_id):
+        with Session(self.engine) as session:
+            row = session.get(GuildSettings, str(guild_id))
+            if row and row.prefix:
+                return row.prefix
+            return "r."
+
+    def is_command_disabled(self, guild_id, command_name, category_key=None):
+        with Session(self.engine) as session:
+            row = session.get(GuildSettings, str(guild_id))
+            if not row:
+                return False
+            try:
+                disabled_cmds = json.loads(row.disabled_commands or "[]")
+                if command_name in disabled_cmds:
+                    return True
+                if category_key:
+                    disabled_cats = json.loads(row.disabled_categories or "[]")
+                    if category_key in disabled_cats:
+                        return True
+            except Exception:
+                return False
+            return False
+
+    def get_confession_config(self, guild_id):
+        with Session(self.engine) as session:
+            config = session.get(ConfessionConfig, str(guild_id))
+            if config:
+                return {
+                    "guild_id": str(config.guild_id),
+                    "channel_id": str(config.channel_id),
+                    "log_channel_id": str(config.log_channel_id),
+                    "next_number": config.next_number,
+                }
+            return None
+
+    def get_ticket_config(self, guild_id):
+        with Session(self.engine) as session:
+            config = session.get(TicketConfig, str(guild_id))
+            if config:
+                return {
+                    "guild_id": str(config.guild_id),
+                    "category_id": str(config.category_id),
+                    "next_number": config.next_number,
+                }
+            return None
+
+    def get_quiz_config(self, guild_id):
+        return self.quiz_config(guild_id)
+
+
+def get_database_url():
+    url = os.getenv("BOT_DATABASE_URL")
+    if url:
+        return url
+    if os.getenv("VERCEL"):
+        import shutil, tempfile
+        tmp_db = Path(tempfile.gettempdir()) / "bot.db"
+        root_db = Path(__file__).resolve().parent / "bot.db"
+        if root_db.exists() and not tmp_db.exists():
+            try:
+                shutil.copy2(root_db, tmp_db)
+            except Exception:
+                pass
+        return f"sqlite:///{tmp_db.as_posix()}"
+    return f"sqlite:///{(Path(__file__).resolve().parent / 'bot.db').as_posix()}"
+
+
+database = Database(get_database_url())

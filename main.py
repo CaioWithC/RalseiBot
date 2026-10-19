@@ -3,24 +3,40 @@ import math
 import os
 import time
 
+from flask import app
 import nextcord
 from dotenv import load_dotenv
 from nextcord.ext import commands
+from mangum import Mangum
+
 
 load_dotenv()
 
 from db import EconomyError, database
-from cogs.command_support import DualCommand, ModerationError, slash_name
+from cogs.command_support import DualCommand, ModerationError, CommandDisabledError, slash_name
 from cogs.help_system import build_command_detail_embed, build_home_embed, HelpView
 
 log = logging.getLogger(__name__)
+
+
+class RalseiBot(commands.Bot):
+    async def get_prefix(self, message):
+        default = self.command_prefix
+        if message and getattr(message, "guild", None):
+            try:
+                prefix = database.get_guild_prefix(message.guild.id)
+                if prefix and prefix != default:
+                    return (prefix, default)
+            except Exception:
+                pass
+        return default
 
 
 def error_message(error, usage, *, now=None):
     original = error
     while hasattr(original, "original"):
         original = original.original
-    if isinstance(original, (EconomyError, ModerationError)):
+    if isinstance(original, (EconomyError, ModerationError, CommandDisabledError)):
         return str(original)
     if isinstance(original, commands.NoPrivateMessage):
         return "Use esse comando em um servidor."
@@ -57,9 +73,19 @@ def create_bot():
     intents = nextcord.Intents.default()
     intents.members = True
     intents.message_content = True
-    bot = commands.Bot(command_prefix="r.", intents=intents, help_command=None,
-                       allowed_mentions=nextcord.AllowedMentions.none())
-    for extension in ("economy", "music", "leaderboard", "games", "poker", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno", "moderation", "ai", "userinfo", "tarot"):
+    bot = RalseiBot(command_prefix="r.", intents=intents, help_command=None,
+                    allowed_mentions=nextcord.AllowedMentions.none())
+
+    @bot.check
+    async def check_command_enabled(ctx):
+        if ctx.guild and ctx.command:
+            root_name = ctx.command.root_parent.name if ctx.command.root_parent else ctx.command.name
+            if root_name not in ("help", "ping", "sync"):
+                if database.is_command_disabled(str(ctx.guild.id), root_name) or database.is_command_disabled(str(ctx.guild.id), ctx.command.qualified_name):
+                    raise CommandDisabledError(ctx.command.qualified_name)
+        return True
+
+    for extension in ("economy", "music", "leaderboard", "games", "poker", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno", "moderation", "ai", "userinfo", "tarot", "anilist"):
         bot.load_extension(f"cogs.{extension}")
 
     @bot.event
@@ -127,6 +153,7 @@ def create_bot():
     bot.load_extension("cogs.slash_commands")
     return bot
 
+handler = Mangum(app)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

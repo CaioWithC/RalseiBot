@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Meus Servidores · RalseiBot Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+  <div class="dashboard-header">
+    <div class="header-left">
+      <h1 class="page-title"><i class="fa-solid fa-server"></i> Selecione um Servidor</h1>
+      <p class="page-subtitle">Apenas servidores onde você é <strong>Dono</strong> ou possui permissão de <strong>Administrador</strong> são listados abaixo.</p>
+    </div>
+    <div class="header-right">
+      <div class="badge-counter">
+        <span class="badge-number">{{ active_count }} / {{ total_count }}</span>
+        <span class="badge-text">Com RalseiBot ativo</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters & Search Toolbar -->
+  <div class="toolbar">
+    <div class="search-box">
+      <i class="fa-solid fa-magnifying-glass search-icon"></i>
+      <input type="text" id="server-search" placeholder="Buscar servidor por nome..." autocomplete="off">
+      <button id="clear-search" class="clear-search-btn" style="display:none;" title="Limpar busca">&times;</button>
+    </div>
+
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-filter="all">
+        Todos <span class="tab-count">({{ total_count }})</span>
+      </button>
+      <button class="filter-tab" data-filter="active">
+        <i class="fa-solid fa-circle-check" style="color: var(--ralsei-mint);"></i> Com Bot <span class="tab-count">({{ active_count }})</span>
+      </button>
+      <button class="filter-tab" data-filter="missing">
+        <i class="fa-solid fa-circle-plus" style="color: var(--text-muted);"></i> Sem Bot <span class="tab-count">({{ total_count - active_count }})</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Guilds Grid -->
+  {% if guilds %}
+    <div class="guilds-grid" id="guilds-grid">
+      {% for guild in guilds %}
+        <div class="guild-card" data-name="{{ guild.name|lower }}" data-has-bot="{{ 'true' if guild.has_bot else 'false' }}">
+          <div class="guild-card-top">
+            <div class="guild-icon-wrapper">
+              {% if guild.icon_url %}
+                <img src="{{ guild.icon_url }}" alt="{{ guild.name }}" class="guild-icon" loading="lazy">
+              {% else %}
+                <div class="guild-icon-placeholder">
+                  {{ guild.name[:2]|upper }}
+                </div>
+              {% endif %}
+              {% if guild.has_bot %}
+                <span class="guild-status-dot online" title="RalseiBot presente no servidor"></span>
+              {% else %}
+                <span class="guild-status-dot offline" title="Bot ainda não adicionado"></span>
+              {% endif %}
+            </div>
+
+            <div class="guild-info">
+              <h3 class="guild-name" title="{{ guild.name }}">{{ guild.name }}</h3>
+              <div class="guild-badges">
+                {% if guild.owner %}
+                  <span class="badge badge-owner"><i class="fa-solid fa-crown"></i> Dono</span>
+                {% else %}
+                  <span class="badge badge-admin"><i class="fa-solid fa-shield"></i> Administrador</span>
+                {% endif %}
+
+                {% if guild.has_bot %}
+                  <span class="badge badge-active"><i class="fa-solid fa-circle-check"></i> Ralsei Presente</span>
+                {% else %}
+                  <span class="badge badge-missing"><i class="fa-solid fa-circle-minus"></i> Bot Ausente</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="guild-card-actions">
+            {% if guild.has_bot %}
+              <a href="{{ guild.config_url }}" class="btn-card btn-card-manage">
+                <i class="fa-solid fa-sliders"></i> Configurar Servidor
+              </a>
+            {% else %}
+              <a href="{{ guild.invite_url }}" target="_blank" class="btn-card btn-card-invite">
+                <i class="fa-solid fa-plus"></i> Adicionar ao Servidor
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Empty Search State -->
+    <div id="no-search-results" class="empty-state" style="display: none;">
+      <i class="fa-solid fa-magnifying-glass empty-icon"></i>
+      <h3>Nenhum servidor encontrado</h3>
+      <p>Nenhum servidor com privilégio de administrador corresponde à sua pesquisa.</p>
+    </div>
+
+  {% else %}
+    <div class="empty-state">
+      <i class="fa-solid fa-shield-cat empty-icon"></i>
+      <h3>Nenhum servidor elegível</h3>
+      <p>Você não é Dono ou Administrador de nenhum servidor no momento, ou sua conta do Discord ainda não foi adicionada a nenhum servidor com essas permissões.</p>
+      <div style="margin-top: 20px;">
+        <a href="{{ invite_general }}" target="_blank" class="btn-primary">
+          <i class="fa-solid fa-plus"></i> Convidar Ralsei para Novo Servidor
+        </a>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
