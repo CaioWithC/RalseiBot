@@ -37,19 +37,19 @@
 
   <!-- Navigation Tabs -->
   <div class="tabs-nav">
-    <button class="tab-btn active" data-tab="tab-general">
+    <button type="button" class="tab-btn active" data-tab="tab-general">
       <i class="fa-solid fa-sliders"></i> Geral & Prefixo
     </button>
-    <button class="tab-btn" data-tab="tab-commands">
+    <button type="button" class="tab-btn" data-tab="tab-commands">
       <i class="fa-solid fa-terminal"></i> Comandos & Módulos
     </button>
-    <button class="tab-btn" data-tab="tab-confessions">
+    <button type="button" class="tab-btn" data-tab="tab-confessions">
       <i class="fa-solid fa-envelope-open-text"></i> Confissões
     </button>
-    <button class="tab-btn" data-tab="tab-tickets">
+    <button type="button" class="tab-btn" data-tab="tab-tickets">
       <i class="fa-solid fa-ticket"></i> Tickets
     </button>
-    <button class="tab-btn" data-tab="tab-quiz">
+    <button type="button" class="tab-btn" data-tab="tab-quiz">
       <i class="fa-solid fa-brain"></i> Quiz Automático
     </button>
   </div>
@@ -147,9 +147,9 @@
       </div>
 
       <div class="cmd-category-filters">
-        <button class="cmd-filter-pill active" data-cat="all">Todos</button>
+        <button type="button" class="cmd-filter-pill active" data-cat="all">Todos</button>
         {% for cat_key, cat_data in categories_info.items() %}
-          <button class="cmd-filter-pill" data-cat="{{ cat_key }}">
+          <button type="button" class="cmd-filter-pill" data-cat="{{ cat_key }}">
             {{ cat_data.emoji }} {{ cat_data.label }}
           </button>
         {% endfor %}

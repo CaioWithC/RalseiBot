@@ -126,6 +126,20 @@ class BotGuildCustomizationTests(unittest.IsolatedAsyncioTestCase):
             result = await check(ctx)
             self.assertTrue(result)
 
+    async def test_bot_check_passes_category_key(self):
+        check = self.bot._checks[0]
+        cmd = self.bot.get_command("rob")
+        ctx = SimpleNamespace(
+            guild=SimpleNamespace(id="guild-cat-blocked"),
+            command=cmd,
+        )
+
+        with patch("main.database.is_command_disabled") as mock_disabled:
+            mock_disabled.return_value = True
+            with self.assertRaises(CommandDisabledError):
+                await check(ctx)
+            mock_disabled.assert_called_with("guild-cat-blocked", "rob", category_key="economia")
+
 
 class DiscordPermissionsAndWebDashboardTests(unittest.TestCase):
     def test_is_admin_or_owner_detection(self):

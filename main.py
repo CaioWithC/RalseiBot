@@ -13,6 +13,7 @@ load_dotenv()
 from db import EconomyError, database
 from cogs.command_support import DualCommand, ModerationError, CommandDisabledError, slash_name
 from cogs.help_system import build_command_detail_embed, build_home_embed, HelpView
+from web.command_data import COMMAND_METADATA
 
 log = logging.getLogger(__name__)
 
@@ -79,7 +80,8 @@ def create_bot():
         if ctx.guild and ctx.command:
             root_name = ctx.command.root_parent.name if ctx.command.root_parent else ctx.command.name
             if root_name not in ("help", "ping", "sync"):
-                if database.is_command_disabled(str(ctx.guild.id), root_name) or database.is_command_disabled(str(ctx.guild.id), ctx.command.qualified_name):
+                cat_key = COMMAND_METADATA.get(root_name, {}).get("cat")
+                if database.is_command_disabled(str(ctx.guild.id), root_name, category_key=cat_key) or database.is_command_disabled(str(ctx.guild.id), ctx.command.qualified_name, category_key=cat_key):
                     raise CommandDisabledError(ctx.command.qualified_name)
         return True
 
@@ -118,6 +120,10 @@ def create_bot():
 
     @bot.command(cls=DualCommand, name="sync",
                  help="Administrador: sincroniza os comandos de barra com o Discord.")
+    @bot.command(cls=DualCommand, name="site", help="Visite o nosso site.")
+    async def site(ctx):
+        await ctx.send("https://ralseibot.vercel.app/")
+
     @commands.guild_only()
     @commands.has_permissions(administrator=True)
     async def sync_commands(ctx):

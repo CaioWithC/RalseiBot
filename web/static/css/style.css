@@ -1001,6 +1001,10 @@ code {
   position: relative;
 }
 
+.tab-btn > * {
+  pointer-events: none;
+}
+
 .tab-btn:hover {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.03);
@@ -1198,6 +1202,10 @@ code {
   border-radius: 20px;
   cursor: pointer;
   transition: var(--transition);
+}
+
+.cmd-filter-pill > * {
+  pointer-events: none;
 }
 
 .cmd-filter-pill:hover, .cmd-filter-pill.active {

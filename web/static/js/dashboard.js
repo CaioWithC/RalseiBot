@@ -3,17 +3,27 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  initToasts();
-  initServerSearch();
-  initTabs();
-  initCommandFilters();
-  initCategoryToggles();
-  initFormSaves();
+  try { initToasts(); } catch (e) { console.error('Error in initToasts:', e); }
+  try { initServerSearch(); } catch (e) { console.error('Error in initServerSearch:', e); }
+  try { initTabs(); } catch (e) { console.error('Error in initTabs:', e); }
+  try { initCommandFilters(); } catch (e) { console.error('Error in initCommandFilters:', e); }
+  try { initCategoryToggles(); } catch (e) { console.error('Error in initCategoryToggles:', e); }
+  try { initFormSaves(); } catch (e) { console.error('Error in initFormSaves:', e); }
 });
 
 // ==========================================================================
-// TOAST NOTIFICATIONS
+// TOAST NOTIFICATIONS & ALERTS
 // ==========================================================================
+function initToasts() {
+  document.querySelectorAll('.alert').forEach(alert => {
+    setTimeout(() => {
+      alert.style.opacity = '0';
+      alert.style.transform = 'translateY(-10px)';
+      setTimeout(() => alert.remove(), 400);
+    }, 5000);
+  });
+}
+
 function showToast(message, type = 'info', duration = 4000) {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -131,26 +141,49 @@ function initTabs() {
 
   if (tabButtons.length === 0) return;
 
-  tabButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const targetId = btn.getAttribute('data-tab');
+  function switchTab(targetId) {
+    if (!targetId) return;
+    const targetPane = document.getElementById(targetId);
+    if (!targetPane) return;
 
-      tabButtons.forEach(b => b.classList.remove('active'));
-      tabPanes.forEach(p => p.classList.remove('active'));
+    tabButtons.forEach(b => {
+      if (b.getAttribute('data-tab') === targetId) {
+        b.classList.add('active');
+      } else {
+        b.classList.remove('active');
+      }
+    });
 
-      btn.classList.add('active');
-      const targetPane = document.getElementById(targetId);
-      if (targetPane) targetPane.classList.add('active');
+    tabPanes.forEach(p => {
+      if (p.id === targetId) {
+        p.classList.add('active');
+      } else {
+        p.classList.remove('active');
+      }
+    });
 
-      // Update URL hash without scroll
+    try {
       history.replaceState(null, null, `#${targetId}`);
+    } catch (e) {}
+  }
+
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = btn.getAttribute('data-tab');
+      switchTab(targetId);
     });
   });
 
   // Activate tab from URL hash if present
   if (window.location.hash) {
-    const activeBtn = document.querySelector(`.tab-btn[data-tab="${window.location.hash.substring(1)}"]`);
-    if (activeBtn) activeBtn.click();
+    try {
+      const hashId = window.location.hash.substring(1);
+      const matchingBtn = document.querySelector(`.tab-btn[data-tab="${CSS.escape(hashId)}"]`);
+      if (matchingBtn) {
+        switchTab(hashId);
+      }
+    } catch (e) {}
   }
 }
 
@@ -162,14 +195,13 @@ function initCommandFilters() {
   const clearBtn = document.getElementById('clear-cmd-search');
   const filterPills = document.querySelectorAll('.cmd-filter-pill');
   const blocks = document.querySelectorAll('.category-block');
-  const cards = document.querySelectorAll('.command-card');
 
   if (!searchInput && filterPills.length === 0) return;
 
   let currentCategory = 'all';
 
   function filterCommands() {
-    const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    const query = (searchInput?.value || '').trim().toLowerCase();
 
     blocks.forEach(block => {
       const catId = block.getAttribute('data-cat-id');
@@ -191,8 +223,8 @@ function initCommandFilters() {
         }
       });
 
-      // Show or hide entire category block if no commands match
-      block.style.display = (matchesCategory && visibleInBlock > 0) ? 'block' : 'none';
+      // Show or hide category block if category matches and commands match query
+      block.style.display = (matchesCategory && (visibleInBlock > 0 || query === '')) ? 'block' : 'none';
     });
 
     if (clearBtn) {
@@ -205,7 +237,8 @@ function initCommandFilters() {
   }
 
   if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
+    clearBtn.addEventListener('click', (e) => {
+      e.preventDefault();
       searchInput.value = '';
       filterCommands();
       searchInput.focus();
@@ -213,7 +246,8 @@ function initCommandFilters() {
   }
 
   filterPills.forEach(pill => {
-    pill.addEventListener('click', () => {
+    pill.addEventListener('click', (e) => {
+      e.preventDefault();
       filterPills.forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
       currentCategory = pill.getAttribute('data-cat') || 'all';
