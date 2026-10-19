@@ -52,14 +52,24 @@ try:
             ])
             return [body]
 
-        # Fix PATH_INFO if Vercel routed to /api/index
-        forwarded_uri = environ.get("HTTP_X_FORWARDED_URI")
-        if forwarded_uri:
-            environ["PATH_INFO"] = forwarded_uri.split("?")[0]
+        # Extract original route passed by Vercel rewrite (?__route__=...)
+        query_string = environ.get("QUERY_STRING", "")
+        if "__route__=" in query_string:
+            from urllib.parse import parse_qs, urlencode
+            qs = parse_qs(query_string, keep_blank_values=True)
+            if "__route__" in qs:
+                route_val = qs.pop("__route__")[0]
+                if not route_val.startswith("/"):
+                    route_val = "/" + route_val
+                while route_val.startswith("//"):
+                    route_val = route_val[1:]
+                environ["PATH_INFO"] = route_val
+                environ["QUERY_STRING"] = urlencode(qs, doseq=True)
         elif environ.get("PATH_INFO") == "/api/index":
             environ["PATH_INFO"] = "/"
         elif environ.get("PATH_INFO", "").startswith("/api/index/"):
             environ["PATH_INFO"] = environ["PATH_INFO"][len("/api/index"):]
+
 
 
         try:
