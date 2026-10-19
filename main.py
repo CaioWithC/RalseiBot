@@ -152,6 +152,13 @@ def create_bot():
     return bot
 
 
+# Top-level WSGI exports for Vercel deployment detection
+from web.app import create_app as _create_dashboard_app
+app = _create_dashboard_app()
+application = app
+handler = app
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     token = os.getenv("DISCORD_TOKEN")
