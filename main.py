@@ -3,11 +3,9 @@ import math
 import os
 import time
 
-from flask import app
 import nextcord
 from dotenv import load_dotenv
 from nextcord.ext import commands
-from mangum import Mangum
 
 
 load_dotenv()
@@ -153,7 +151,6 @@ def create_bot():
     bot.load_extension("cogs.slash_commands")
     return bot
 
-handler = Mangum(app)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
