@@ -233,29 +233,50 @@ class GuildSettings(Base):
 
 class Database:
     def __init__(self, url):
-        self.engine = create_engine(url, connect_args={"timeout": 10})
-        Base.metadata.create_all(self.engine)
-        self._ensure_schema()
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+
+        connect_args = {}
+        if url.startswith("sqlite"):
+            connect_args = {"timeout": 10, "check_same_thread": False}
+
+        self.engine = create_engine(url, connect_args=connect_args)
+        try:
+            Base.metadata.create_all(self.engine)
+            self._ensure_schema()
+        except Exception:
+            pass
 
     def _ensure_schema(self):
         try:
+            is_sqlite = "sqlite" in str(self.engine.url)
+            is_vercel = bool(os.getenv("VERCEL") or os.getenv("VERCEL_URL"))
             with self.engine.connect() as conn:
-                conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
-                columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(social_profiles)").fetchall()]
-                if columns and "pet" not in columns:
-                    conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN pet VARCHAR(100)")
-                if columns and "namemc" not in columns:
-                    conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN namemc VARCHAR(32)")
-                if columns and "anilist" not in columns:
-                    conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN anilist VARCHAR(50)")
+                if is_sqlite and not is_vercel:
+                    try:
+                        conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
+                    except Exception:
+                        pass
+                if is_sqlite:
+                    columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(social_profiles)").fetchall()]
+                    if columns and "pet" not in columns:
+                        conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN pet VARCHAR(100)")
+                    if columns and "namemc" not in columns:
+                        conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN namemc VARCHAR(32)")
+                    if columns and "anilist" not in columns:
+                        conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN anilist VARCHAR(50)")
         except Exception:
             pass
 
     @contextmanager
     def transaction(self):
         with Session(self.engine) as session:
-            # Serialize read/check/write operations across SQLite connections.
-            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            # Serialize read/check/write operations on SQLite connections.
+            if "sqlite" in str(self.engine.url):
+                try:
+                    session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                except Exception:
+                    pass
             try:
                 yield session
                 session.commit()
@@ -1168,8 +1189,10 @@ class Database:
 def get_database_url():
     url = os.getenv("BOT_DATABASE_URL")
     if url:
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
         return url
-    if os.getenv("VERCEL"):
+    if os.getenv("VERCEL") or os.getenv("VERCEL_URL"):
         import shutil, tempfile
         tmp_db = Path(tempfile.gettempdir()) / "bot.db"
         root_db = Path(__file__).resolve().parent / "bot.db"
