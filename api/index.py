@@ -42,14 +42,25 @@ try:
     _original_wsgi_app = app.wsgi_app
 
     def _safe_wsgi_app(environ, start_response):
+        if "debug" in environ.get("QUERY_STRING", "") or environ.get("PATH_INFO") == "/__debug__":
+            import json
+            safe_env = {k: str(v) for k, v in environ.items() if not k.startswith("HTTP_COOKIE") and "SECRET" not in k and "TOKEN" not in k}
+            body = json.dumps(safe_env, indent=2).encode("utf-8")
+            start_response("200 OK", [
+                ("Content-Type", "application/json"),
+                ("Content-Length", str(len(body))),
+            ])
+            return [body]
+
         # Fix PATH_INFO if Vercel routed to /api/index
-        forwarded_uri = environ.get("HTTP_X_FORWARDED_URI") or environ.get("HTTP_X_MATCHED_PATH")
+        forwarded_uri = environ.get("HTTP_X_FORWARDED_URI")
         if forwarded_uri:
             environ["PATH_INFO"] = forwarded_uri.split("?")[0]
         elif environ.get("PATH_INFO") == "/api/index":
             environ["PATH_INFO"] = "/"
         elif environ.get("PATH_INFO", "").startswith("/api/index/"):
             environ["PATH_INFO"] = environ["PATH_INFO"][len("/api/index"):]
+
 
         try:
             return _original_wsgi_app(environ, start_response)
