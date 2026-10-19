@@ -153,13 +153,8 @@ def create_bot():
 
 
 # Top-level WSGI exports for Vercel deployment detection
-class _LazyVercelWSGI:
-    def __call__(self, environ, start_response):
-        from api.index import app as _index_app
-        return _index_app(environ, start_response)
-
-
-app = _LazyVercelWSGI()
+from api.index import app as _index_app
+app = _index_app
 application = app
 handler = app
 

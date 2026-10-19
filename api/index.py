@@ -1,5 +1,6 @@
 """Vercel Serverless Function entry point for RalseiBot Dashboard."""
 import sys
+import traceback
 from pathlib import Path
 
 # Add project root directory to sys.path
@@ -7,43 +8,40 @@ root_dir = Path(__file__).resolve().parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
-class WSGIHandler:
-    def __init__(self):
-        self._app = None
-        self._error = None
-        try:
-            from web.app import create_app
-            self._app = create_app()
-        except Exception:
-            import traceback
-            self._error = traceback.format_exc()
+from flask import Flask
 
-    def __call__(self, environ, start_response):
-        if self._error:
-            content = f"<!DOCTYPE html><html><body><h2>Initialization Traceback:</h2><pre>{self._error}</pre></body></html>"
-            body = content.encode("utf-8")
-            start_response("200 OK", [
-                ("Content-Type", "text/html; charset=utf-8"),
-                ("Content-Length", str(len(body)))
-            ])
-            return [body]
+# Top-level AST assignment for Vercel detector
+app = Flask(__name__)
 
+try:
+    from web.app import create_app
+    app = create_app()
+
+    # Wrap wsgi_app to catch and display any runtime exceptions cleanly
+    _original_wsgi_app = app.wsgi_app
+
+    def _safe_wsgi_app(environ, start_response):
         try:
-            return self._app(environ, start_response)
+            return _original_wsgi_app(environ, start_response)
         except Exception:
-            import traceback
             err = traceback.format_exc()
-            content = f"<!DOCTYPE html><html><body><h2>Runtime Traceback:</h2><pre>{err}</pre></body></html>"
+            content = f"<!DOCTYPE html><html><body><h2>Flask Runtime Error</h2><pre>{err}</pre></body></html>"
             body = content.encode("utf-8")
             start_response("200 OK", [
                 ("Content-Type", "text/html; charset=utf-8"),
-                ("Content-Length", str(len(body)))
+                ("Content-Length", str(len(body))),
             ])
             return [body]
 
+    app.wsgi_app = _safe_wsgi_app
 
-# Vercel Serverless top-level WSGI exports
-app = WSGIHandler()
+except Exception:
+    _init_err = traceback.format_exc()
+
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def catch_all(path):
+        return f"<!DOCTYPE html><html><body><h2>Cold Start Error</h2><pre>{_init_err}</pre></body></html>", 200
+
 application = app
 handler = app
-
