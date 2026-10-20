@@ -1,6 +1,12 @@
 {
+<<<<<<< HEAD
   "123": {
     "date": "2026-10-13",
     "index": 1
+=======
+  "222222222222222222": {
+    "date": "2026-10-17",
+    "index": 0
+>>>>>>> parent of 32b2f5a (feat: Add base HTML template and dashboard layout for RalseiBot)
   }
 }

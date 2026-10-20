@@ -123,7 +123,6 @@ class SocialProfile(Base):
     background = Column(LargeBinary, nullable=True)
     pet = Column(String(100), nullable=True)
     namemc = Column(String(32), nullable=True)
-    anilist = Column(String(50), nullable=True)
 
 
 class ShipScore(Base):
@@ -219,18 +218,6 @@ class ChannelLock(Base):
     permissions = Column(String, nullable=False)
 
 
-class GuildSettings(Base):
-    __tablename__ = "guild_settings"
-    guild_id = Column(String, primary_key=True)
-    prefix = Column(String(10), default="r.", nullable=False)
-    disabled_commands = Column(String, default="[]", nullable=False)
-    disabled_categories = Column(String, default="[]", nullable=False)
-    mod_log_channel_id = Column(String, nullable=True)
-    welcome_channel_id = Column(String, nullable=True)
-    welcome_message = Column(String, nullable=True)
-    updated_at = Column(Integer, nullable=True)
-
-
 class Database:
     def __init__(self, url):
         if url.startswith("postgres://"):
@@ -252,6 +239,7 @@ class Database:
             is_sqlite = "sqlite" in str(self.engine.url)
             is_vercel = bool(os.getenv("VERCEL") or os.getenv("VERCEL_URL"))
             with self.engine.connect() as conn:
+<<<<<<< HEAD
                 if is_sqlite and not is_vercel:
                     try:
                         conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
@@ -265,6 +253,13 @@ class Database:
                         conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN namemc VARCHAR(32)")
                     if columns and "anilist" not in columns:
                         conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN anilist VARCHAR(50)")
+=======
+                columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(social_profiles)").fetchall()]
+                if columns and "pet" not in columns:
+                    conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN pet VARCHAR(100)")
+                if columns and "namemc" not in columns:
+                    conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN namemc VARCHAR(32)")
+>>>>>>> parent of 32b2f5a (feat: Add base HTML template and dashboard layout for RalseiBot)
         except Exception:
             pass
 
@@ -784,11 +779,10 @@ class Database:
             return {"discord_id": user.discord_id, "balance": user.balance, "rank": ahead + 1,
                     "color": profile.color, "about": profile.about, "background": profile.background,
                     "pet": getattr(profile, "pet", None),
-                    "namemc": getattr(profile, "namemc", None),
-                    "anilist": getattr(profile, "anilist", None)}
+                    "namemc": getattr(profile, "namemc", None)}
 
     def update_profile(self, discord_id, **changes):
-        if not changes or changes.keys() - {"color", "about", "background", "pet", "namemc", "anilist"}:
+        if not changes or changes.keys() - {"color", "about", "background", "pet", "namemc"}:
             raise EconomyError("Campo de perfil inválido.")
         with self.transaction() as session:
             self.user(session, discord_id)
@@ -1083,24 +1077,8 @@ class Database:
             row.winner_id, row.status = str(user_id), "won"
             return row.reward
 
-    def get_guild_settings(self, guild_id):
-        with self.transaction() as session:
-            row = session.get(GuildSettings, str(guild_id))
-            if row is None:
-                row = GuildSettings(guild_id=str(guild_id), prefix="r.", disabled_commands="[]", disabled_categories="[]")
-                session.add(row)
-                session.flush()
-            return {
-                "guild_id": str(row.guild_id),
-                "prefix": row.prefix or "r.",
-                "disabled_commands": json.loads(row.disabled_commands or "[]"),
-                "disabled_categories": json.loads(row.disabled_categories or "[]"),
-                "mod_log_channel_id": row.mod_log_channel_id,
-                "welcome_channel_id": row.welcome_channel_id,
-                "welcome_message": row.welcome_message,
-                "updated_at": row.updated_at,
-            }
 
+<<<<<<< HEAD
     def update_guild_settings(self, guild_id, **kwargs):
         with self.transaction() as session:
             row = session.get(GuildSettings, str(guild_id))
@@ -1206,3 +1184,7 @@ def get_database_url():
 
 
 database = Database(get_database_url())
+=======
+database = Database(os.getenv("BOT_DATABASE_URL", "sqlite:///" +
+                             (Path(__file__).parent / "bot.db").as_posix()))
+>>>>>>> parent of 32b2f5a (feat: Add base HTML template and dashboard layout for RalseiBot)

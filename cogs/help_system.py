@@ -39,7 +39,6 @@ HELP_CATEGORIES = {
             "rich",
             "userinfo",
             "tarot",
-            "anilist",
         ],
     },
     "roleplay": {
