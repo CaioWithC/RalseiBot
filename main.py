@@ -10,18 +10,30 @@ from nextcord.ext import commands
 load_dotenv()
 
 from db import EconomyError, database
-from cogs.command_support import DualCommand, ModerationError, slash_name
+from cogs.command_support import DualCommand, ModerationError, CommandDisabledError, slash_name
 from cogs.help_system import build_command_detail_embed, build_home_embed, HelpView
-from web.command_data import COMMAND_METADATA
 
 log = logging.getLogger(__name__)
+
+
+class RalseiBot(commands.Bot):
+    async def get_prefix(self, message):
+        default = self.command_prefix
+        if message and getattr(message, "guild", None):
+            try:
+                prefix = database.get_guild_prefix(message.guild.id)
+                if prefix and prefix != default:
+                    return (prefix, default)
+            except Exception:
+                pass
+        return default
 
 
 def error_message(error, usage, *, now=None):
     original = error
     while hasattr(original, "original"):
         original = original.original
-    if isinstance(original, (EconomyError, ModerationError)):
+    if isinstance(original, (EconomyError, ModerationError, CommandDisabledError)):
         return str(original)
     if isinstance(original, commands.NoPrivateMessage):
         return "Use esse comando em um servidor."
@@ -66,8 +78,7 @@ def create_bot():
         if ctx.guild and ctx.command:
             root_name = ctx.command.root_parent.name if ctx.command.root_parent else ctx.command.name
             if root_name not in ("help", "ping", "sync"):
-                cat_key = COMMAND_METADATA.get(root_name, {}).get("cat")
-                if database.is_command_disabled(str(ctx.guild.id), root_name, category_key=cat_key) or database.is_command_disabled(str(ctx.guild.id), ctx.command.qualified_name, category_key=cat_key):
+                if database.is_command_disabled(str(ctx.guild.id), root_name) or database.is_command_disabled(str(ctx.guild.id), ctx.command.qualified_name):
                     raise CommandDisabledError(ctx.command.qualified_name)
         return True
 
@@ -142,13 +153,6 @@ def create_bot():
     # Nextcord registers global application commands automatically on connection.
     bot.load_extension("cogs.slash_commands")
     return bot
-
-
-# Top-level WSGI exports for Vercel deployment detection
-from api.index import app as _index_app
-app = _index_app
-application = app
-handler = app
 
 
 if __name__ == "__main__":
