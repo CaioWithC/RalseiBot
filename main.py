@@ -6,10 +6,6 @@ import time
 import nextcord
 from dotenv import load_dotenv
 from nextcord.ext import commands
-<<<<<<< HEAD
-
-=======
->>>>>>> parent of 32b2f5a (feat: Add base HTML template and dashboard layout for RalseiBot)
 
 load_dotenv()
 
@@ -62,7 +58,6 @@ def create_bot():
     intents = nextcord.Intents.default()
     intents.members = True
     intents.message_content = True
-<<<<<<< HEAD
     bot = RalseiBot(command_prefix="r.", intents=intents, help_command=None,
                     allowed_mentions=nextcord.AllowedMentions.none())
 
@@ -77,11 +72,6 @@ def create_bot():
         return True
 
     for extension in ("economy", "music", "leaderboard", "games", "poker", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno", "moderation", "ai", "userinfo", "tarot", "anilist"):
-=======
-    bot = commands.Bot(command_prefix="r.", intents=intents, help_command=None,
-                       allowed_mentions=nextcord.AllowedMentions.none())
-    for extension in ("economy", "music", "leaderboard", "games", "poker", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno", "moderation", "ai", "userinfo", "tarot"):
->>>>>>> parent of 32b2f5a (feat: Add base HTML template and dashboard layout for RalseiBot)
         bot.load_extension(f"cogs.{extension}")
 
     @bot.event
@@ -153,7 +143,6 @@ def create_bot():
     bot.load_extension("cogs.slash_commands")
     return bot
 
-<<<<<<< HEAD
 
 # Top-level WSGI exports for Vercel deployment detection
 from api.index import app as _index_app
@@ -161,8 +150,6 @@ app = _index_app
 application = app
 handler = app
 
-=======
->>>>>>> parent of 32b2f5a (feat: Add base HTML template and dashboard layout for RalseiBot)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

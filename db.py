@@ -239,7 +239,6 @@ class Database:
             is_sqlite = "sqlite" in str(self.engine.url)
             is_vercel = bool(os.getenv("VERCEL") or os.getenv("VERCEL_URL"))
             with self.engine.connect() as conn:
-<<<<<<< HEAD
                 if is_sqlite and not is_vercel:
                     try:
                         conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
@@ -253,13 +252,6 @@ class Database:
                         conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN namemc VARCHAR(32)")
                     if columns and "anilist" not in columns:
                         conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN anilist VARCHAR(50)")
-=======
-                columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(social_profiles)").fetchall()]
-                if columns and "pet" not in columns:
-                    conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN pet VARCHAR(100)")
-                if columns and "namemc" not in columns:
-                    conn.exec_driver_sql("ALTER TABLE social_profiles ADD COLUMN namemc VARCHAR(32)")
->>>>>>> parent of 32b2f5a (feat: Add base HTML template and dashboard layout for RalseiBot)
         except Exception:
             pass
 
@@ -1078,7 +1070,6 @@ class Database:
             return row.reward
 
 
-<<<<<<< HEAD
     def update_guild_settings(self, guild_id, **kwargs):
         with self.transaction() as session:
             row = session.get(GuildSettings, str(guild_id))
@@ -1184,7 +1175,3 @@ def get_database_url():
 
 
 database = Database(get_database_url())
-=======
-database = Database(os.getenv("BOT_DATABASE_URL", "sqlite:///" +
-                             (Path(__file__).parent / "bot.db").as_posix()))
->>>>>>> parent of 32b2f5a (feat: Add base HTML template and dashboard layout for RalseiBot)
