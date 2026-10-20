@@ -9,6 +9,13 @@ class ModerationError(commands.CheckFailure):
     """An actionable moderation error safe to show to the moderator."""
 
 
+class CommandDisabledError(commands.CheckFailure):
+    """Raised when a command has been disabled by server administrators in the dashboard."""
+    def __init__(self, command_name):
+        self.command_name = command_name
+        super().__init__(f"O comando `{command_name}` está desativado neste servidor.")
+
+
 class InteractionContext(commands.Context):
     def __init__(self, bot, interaction, command, options, attachments=()):
         # Prefix checks, cooldowns and existing upload handlers expect a message.
