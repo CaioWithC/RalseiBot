@@ -242,10 +242,21 @@ class SlashCommands(commands.Cog):
                         vaga: str = nextcord.SlashOption(description="Nome ou código do bico freelance (opcional; omita para abrir o menu).", required=False)):
         await self.invoke(interaction, "freelance", vaga=vaga)
 
+    @nextcord.slash_command(name="ia", description="Converse com o Ralsei usando inteligência artificial.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def ia(self, interaction: nextcord.Interaction,
+                 pergunta: str = nextcord.SlashOption(description="Pergunta ou mensagem para o Ralsei.")):
+        await self.invoke(interaction, "ia", pergunta=pergunta)
+
     @nextcord.slash_command(name="clearmemory", description="Limpa a memória de conversa do Ralsei neste canal.",
                             integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def clearmemory(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "clearmemory")
+
+    @nextcord.slash_command(name="site", description="Visite o nosso site.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def site(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "site")
 
     @nextcord.slash_command(name="rob", description="Roube DarkMoney de outro membro a cada 60 minutos.",
                             integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
