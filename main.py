@@ -7,7 +7,6 @@ import nextcord
 from dotenv import load_dotenv
 from nextcord.ext import commands
 
-
 load_dotenv()
 
 from db import EconomyError, database
@@ -116,6 +115,10 @@ def create_bot():
             message = await ctx.send(embed=embed, view=view, **kwargs)
             view.message = message
 
+    @bot.command(cls=DualCommand, name="site", help="Visite o nosso site.")
+    async def site(ctx):
+        await ctx.send("https://ralseibot.vercel.app/")
+
     @bot.command(cls=DualCommand, name="sync",
                  help="Administrador: sincroniza os comandos de barra com o Discord.")
     @commands.guild_only()
@@ -150,13 +153,6 @@ def create_bot():
     # Nextcord registers global application commands automatically on connection.
     bot.load_extension("cogs.slash_commands")
     return bot
-
-
-# Top-level WSGI exports for Vercel deployment detection
-from api.index import app as _index_app
-app = _index_app
-application = app
-handler = app
 
 
 if __name__ == "__main__":

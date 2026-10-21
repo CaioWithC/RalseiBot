@@ -69,10 +69,29 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         ctx.send = AsyncMock()
         return ctx
 
-    async def invoke(self, content):
+    async def invoke(self, content, auto_confirm=True):
         ctx = await self.context(content)
         with patch.object(commands.MemberConverter, "convert", new=AsyncMock(return_value=self.target)):
             await ctx.command.invoke(ctx)
+        if auto_confirm and ctx.send.call_args:
+            view = ctx.send.call_args.kwargs.get("view")
+            if view and hasattr(view, "confirm_action"):
+                interaction = SimpleNamespace(
+                    user=self.author,
+                    response=SimpleNamespace(
+                        is_done=lambda: False,
+                        edit_message=AsyncMock(),
+                        defer=AsyncMock(),
+                        send_message=AsyncMock(),
+                    ),
+                    edit_original_message=AsyncMock(),
+                    message=SimpleNamespace(edit=AsyncMock())
+                )
+                await view.confirm_action(interaction)
+                if getattr(view, "error", None):
+                    if not isinstance(view.error, commands.CommandError):
+                        raise commands.CommandInvokeError(view.error)
+                    raise view.error
         return ctx
 
     def test_duration_bounds(self):
@@ -225,6 +244,20 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
                                       followup=SimpleNamespace(send=AsyncMock()))
         ctx = InteractionContext(self.bot, interaction, self.bot.get_command("clear"), {"amount": 2})
         await ctx.command.invoke(ctx)
+        view = interaction.followup.send.call_args.kwargs.get("view")
+        if view and hasattr(view, "confirm_action"):
+            mock_interaction = SimpleNamespace(
+                user=self.author,
+                response=SimpleNamespace(
+                    is_done=lambda: False,
+                    edit_message=AsyncMock(),
+                    defer=AsyncMock(),
+                    send_message=AsyncMock(),
+                ),
+                edit_original_message=AsyncMock(),
+                message=SimpleNamespace(edit=AsyncMock())
+            )
+            await view.confirm_action(mock_interaction)
         self.channel.purge.assert_awaited_once_with(limit=2, before=interaction.created_at)
         self.author.guild_permissions = nextcord.Permissions.none()
         ctx = InteractionContext(self.bot, interaction, self.bot.get_command("ban"), {"member": self.target})
@@ -265,6 +298,20 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
                 response = SimpleNamespace(defer=AsyncMock(), is_done=lambda: True)
 
                 async def send(content=None, **kwargs):
+                    view = kwargs.get("view")
+                    if view and hasattr(view, "confirm_action"):
+                        mock_interaction = SimpleNamespace(
+                            user=self.author,
+                            response=SimpleNamespace(
+                                is_done=lambda: False,
+                                edit_message=AsyncMock(),
+                                defer=AsyncMock(),
+                                send_message=AsyncMock(),
+                            ),
+                            edit_original_message=AsyncMock(),
+                            message=SimpleNamespace(edit=AsyncMock())
+                        )
+                        await view.confirm_action(mock_interaction)
                     received.set()
 
                 interaction = SimpleNamespace(
@@ -288,6 +335,59 @@ class ModerationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.channel.set_permissions.await_count, 2)
         self.channel.edit.assert_awaited_once_with(slowmode_delay=15, reason="Moderador: 2 | chat movimentado")
         self.channel.purge.assert_awaited_once()
+
+    async def test_confirmation_view_cancel_aborts_action(self):
+        ctx = await self.invoke("r.banir <@3> motivo teste", auto_confirm=False)
+        self.guild.ban.assert_not_awaited()
+        view = ctx.send.call_args.kwargs.get("view")
+        self.assertIsNotNone(view)
+        embed = ctx.send.call_args.kwargs.get("embed")
+        self.assertIn("Confirmação", embed.title)
+
+        mock_interaction = SimpleNamespace(
+            user=self.author,
+            response=SimpleNamespace(is_done=lambda: False, edit_message=AsyncMock(), defer=AsyncMock(), send_message=AsyncMock()),
+            edit_original_message=AsyncMock(),
+            message=SimpleNamespace(edit=AsyncMock())
+        )
+        await view.cancel_action(mock_interaction)
+        self.guild.ban.assert_not_awaited()
+        self.assertTrue(all(item.disabled for item in view.children))
+        mock_interaction.message.edit.assert_awaited_once()
+        cancel_embed = mock_interaction.message.edit.call_args.kwargs.get("embed")
+        self.assertIn("Cancelada", cancel_embed.title)
+
+    async def test_confirmation_view_timeout(self):
+        ctx = await self.invoke("r.expulsar <@3>", auto_confirm=False)
+        view = ctx.send.call_args.kwargs.get("view")
+        self.assertIsNotNone(view)
+        view.message = SimpleNamespace(edit=AsyncMock())
+        await view.on_timeout()
+        self.target.kick.assert_not_awaited()
+        self.assertTrue(all(item.disabled for item in view.children))
+        view.message.edit.assert_awaited_once()
+        timeout_embed = view.message.edit.call_args.kwargs.get("embed")
+        self.assertIn("Expirada", timeout_embed.title)
+
+    async def test_confirmation_view_blocks_outsider(self):
+        ctx = await self.invoke("r.banir <@3>", auto_confirm=False)
+        view = ctx.send.call_args.kwargs.get("view")
+        outsider = SimpleNamespace(
+            user=SimpleNamespace(id=9999),
+            response=SimpleNamespace(send_message=AsyncMock())
+        )
+        allowed = await view.interaction_check(outsider)
+        self.assertFalse(allowed)
+        outsider.response.send_message.assert_awaited_once()
+        self.assertTrue(outsider.response.send_message.call_args.kwargs.get("ephemeral"))
+
+    async def test_force_flag_bypasses_confirmation(self):
+        ctx = await self.invoke("r.banir <@3> -y spam imediato", auto_confirm=False)
+        self.guild.ban.assert_awaited_once_with(self.target, reason="Moderador: 2 | spam imediato", delete_message_seconds=0)
+        self.assertNotIn("view", ctx.send.call_args.kwargs)
+        embed = ctx.send.call_args.kwargs.get("embed")
+        self.assertIsNotNone(embed)
+        self.assertIn("Banido", embed.title)
 
 
 if __name__ == "__main__":
