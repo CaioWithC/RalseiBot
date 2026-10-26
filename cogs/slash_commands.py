@@ -427,6 +427,31 @@ class SlashCommands(commands.Cog):
                       acao: str = nextcord.SlashOption(description="Ação para sua conta.", choices=["vincular", "desvincular"], required=False)):
         await self.invoke(interaction, "anilist", usuario=usuario, membro=membro, acao=acao)
 
+    @nextcord.slash_command(name="e621", description="Pesquise imagens ou vídeos no e621.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def e621(self, interaction: nextcord.Interaction):
+        pass
+
+    @e621.subcommand(name="image", description="Pesquise uma imagem no e621 por tags.")
+    async def e621_image(self, interaction: nextcord.Interaction,
+                         tags: str = nextcord.SlashOption(description="Tags de busca. Ex.: male/male -solo order:score")):
+        await self.invoke(interaction, "e621 image", tags=tags)
+
+    @e621.subcommand(name="video", description="Pesquise um vídeo no e621 por tags.")
+    async def e621_video(self, interaction: nextcord.Interaction,
+                         tags: str = nextcord.SlashOption(description="Tags de busca. Ex.: male/male animation order:score")):
+        await self.invoke(interaction, "e621 video", tags=tags)
+
+    @e621.subcommand(name="top", description="Ranking de tags e artistas mais pesquisados no servidor.")
+    async def e621_top(self, interaction: nextcord.Interaction,
+                       tipo: str = nextcord.SlashOption(
+                           description="Escolha a categoria do ranking (padrão: tudo).",
+                           choices=["tudo", "tags", "artistas"],
+                           default="tudo",
+                           required=False,
+                       )):
+        await self.invoke(interaction, "e621 top", tipo=tipo)
+
 
 def setup(bot):
     bot.add_cog(SlashCommands(bot))

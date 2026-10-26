@@ -82,7 +82,7 @@ def create_bot():
                     raise CommandDisabledError(ctx.command.qualified_name)
         return True
 
-    for extension in ("economy", "music", "leaderboard", "games", "poker", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno", "moderation", "ai", "userinfo", "tarot", "anilist"):
+    for extension in ("economy", "music", "leaderboard", "games", "poker", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno", "moderation", "ai", "userinfo", "tarot", "anilist", "booru"):
         bot.load_extension(f"cogs.{extension}")
 
     @bot.event
