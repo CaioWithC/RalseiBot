@@ -201,69 +201,68 @@ class AI(commands.Cog):
         final_text, _ = await self.generate_completion(messages)
         return final_text or "Não foi possível gerar o resumo com a IA no momento."
 
-    @commands.Cog.listener()
-    async def on_message(self, message: nextcord.Message):
-        # Ignora mensagens de bots ou do próprio bot
-        if message.author.bot or message.author.id == self.bot.user.id:
+    @commands.command(
+        cls=DualCommand,
+        name="ia",
+        aliases=["chat", "pergunta", "ai"],
+        help="Converse com o Ralsei usando inteligência artificial: r.ia <pergunta>",
+    )
+    @commands.cooldown(1, 3, lambda message: message.author.id)
+    async def ia(self, ctx: commands.Context, *, pergunta: str = None):
+        """Responde a perguntas usando inteligência artificial."""
+        if not pergunta or not pergunta.strip():
+            await ctx.send("Por favor, faça uma pergunta! Exemplo: `r.ia Olá, tudo bem?`")
             return
 
-        bot_user = self.bot.user
-        if not bot_user:
-            return
+        clean_text = pergunta.strip()
+        channel_id = ctx.channel.id if ctx.channel else ctx.author.id
+        is_interaction = getattr(ctx, "interaction", None) is not None
 
-        # Verifica se o bot foi mencionado diretamente ou se é resposta a uma mensagem dele
-        is_mentioned = bot_user in message.mentions and not message.mention_everyone
-        is_reply_to_bot = False
-        if message.reference and isinstance(message.reference.resolved, nextcord.Message):
-            if message.reference.resolved.author.id == bot_user.id:
-                is_reply_to_bot = True
-
-        if not (is_mentioned or is_reply_to_bot):
-            return
-
-        # Ignora comandos com prefixo para não colidir com outros cogs (ex: r.hug @Ralsei)
-        content_stripped = message.content.strip()
-        prefixes = await self.bot.get_prefix(message)
-        if isinstance(prefixes, str):
-            prefixes = [prefixes]
-        if any(content_stripped.startswith(p) for p in prefixes):
-            return
-
-        # Remove a menção do Ralsei do texto da mensagem
-        clean_text = re.sub(rf"<@!?{bot_user.id}>", "", message.content).strip()
-
-        # Se o usuário apenas marcou o bot sem falar nada
-        if not clean_text:
-            await message.reply("Olá! Em que posso te ajudar hoje? *sorri gentilmente*", mention_author=False)
-            return
-
-        channel_id = message.channel.id
         async with self.channel_locks[channel_id]:
-            async with message.channel.typing():
+            # Ativa indicador de digitação se for mensagem de texto comum
+            typing_active = False
+            typing_cm = None
+            if ctx.channel and not is_interaction:
+                try:
+                    typing_cm = ctx.channel.typing()
+                    await typing_cm.__aenter__()
+                    typing_active = True
+                except Exception:
+                    pass
+
+            try:
                 user_entry = {
                     "role": "user",
-                    "content": f"{message.author.display_name}: {clean_text}",
+                    "content": f"{ctx.author.display_name}: {clean_text}",
                 }
                 response = await self.generate_response(channel_id, user_entry)
-                if not response:
-                    return
+            finally:
+                if typing_active and typing_cm:
+                    try:
+                        await typing_cm.__aexit__(None, None, None)
+                    except Exception:
+                        pass
 
-                # Discord possui limite de 2000 caracteres por mensagem
-                if len(response) <= 2000:
-                    await message.reply(response, mention_author=False)
-                else:
-                    chunks = [response[i:i + 1950] for i in range(0, len(response), 1950)]
-                    first = True
-                    for chunk in chunks:
-                        if first:
-                            await message.reply(chunk, mention_author=False)
-                            first = False
-                        else:
-                            await message.channel.send(chunk)
+        if not response:
+            await ctx.send("Desculpe, não consegui pensar em uma resposta agora...")
+            return
+
+        # Discord possui limite de 2000 caracteres por mensagem
+        chunks = [response[i:i + 1950] for i in range(0, len(response), 1950)] if len(response) > 2000 else [response]
+
+        for idx, chunk in enumerate(chunks):
+            if idx == 0 and not is_interaction:
+                try:
+                    await ctx.reply(chunk, mention_author=False)
+                    continue
+                except Exception:
+                    pass
+            await ctx.send(chunk)
 
     @commands.command(cls=DualCommand, name="clearmemory", aliases=["limparmemoria", "esquecer"], help="Limpa a memória de conversa do Ralsei neste canal.")
     async def clear_memory(self, ctx: commands.Context):
-        self.channel_memory.pop(ctx.channel.id, None)
+        channel_id = ctx.channel.id if ctx.channel else ctx.author.id
+        self.channel_memory.pop(channel_id, None)
         await ctx.send("Minha memória deste canal foi limpa! Podemos começar um novo assunto. 🍰")
 
 

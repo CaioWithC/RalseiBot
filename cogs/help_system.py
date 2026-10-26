@@ -85,7 +85,7 @@ HELP_CATEGORIES = {
         "label": "Informações & Geral",
         "emoji": "ℹ️",
         "description": "Comandos gerais e utilidades do bot",
-        "commands": ["help", "ping", "clearmemory"],
+        "commands": ["help", "ping", "site", "ia", "clearmemory", "e621"],
     },
 }
 

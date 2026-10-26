@@ -7,7 +7,6 @@ import nextcord
 from dotenv import load_dotenv
 from nextcord.ext import commands
 
-
 load_dotenv()
 
 from db import EconomyError, database
@@ -83,7 +82,7 @@ def create_bot():
                     raise CommandDisabledError(ctx.command.qualified_name)
         return True
 
-    for extension in ("economy", "music", "leaderboard", "games", "poker", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno", "moderation", "ai", "userinfo", "tarot", "anilist"):
+    for extension in ("economy", "music", "leaderboard", "games", "poker", "social", "activities", "marriage", "roleplay", "sendmessage", "tickets", "missions", "confessions", "quiz", "uno", "moderation", "ai", "userinfo", "tarot", "anilist", "booru"):
         bot.load_extension(f"cogs.{extension}")
 
     @bot.event
@@ -115,6 +114,10 @@ def create_bot():
             view = HelpView(bot, ctx.author.id)
             message = await ctx.send(embed=embed, view=view, **kwargs)
             view.message = message
+
+    @bot.command(cls=DualCommand, name="site", help="Visite o nosso site.")
+    async def site(ctx):
+        await ctx.send("https://ralseibot.vercel.app/")
 
     @bot.command(cls=DualCommand, name="sync",
                  help="Administrador: sincroniza os comandos de barra com o Discord.")
@@ -150,13 +153,6 @@ def create_bot():
     # Nextcord registers global application commands automatically on connection.
     bot.load_extension("cogs.slash_commands")
     return bot
-
-
-# Top-level WSGI exports for Vercel deployment detection
-from api.index import app as _index_app
-app = _index_app
-application = app
-handler = app
 
 
 if __name__ == "__main__":

@@ -242,10 +242,21 @@ class SlashCommands(commands.Cog):
                         vaga: str = nextcord.SlashOption(description="Nome ou código do bico freelance (opcional; omita para abrir o menu).", required=False)):
         await self.invoke(interaction, "freelance", vaga=vaga)
 
+    @nextcord.slash_command(name="ia", description="Converse com o Ralsei usando inteligência artificial.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def ia(self, interaction: nextcord.Interaction,
+                 pergunta: str = nextcord.SlashOption(description="Pergunta ou mensagem para o Ralsei.")):
+        await self.invoke(interaction, "ia", pergunta=pergunta)
+
     @nextcord.slash_command(name="clearmemory", description="Limpa a memória de conversa do Ralsei neste canal.",
                             integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
     async def clearmemory(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "clearmemory")
+
+    @nextcord.slash_command(name="site", description="Visite o nosso site.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def site(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "site")
 
     @nextcord.slash_command(name="rob", description="Roube DarkMoney de outro membro a cada 60 minutos.",
                             integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
@@ -415,6 +426,31 @@ class SlashCommands(commands.Cog):
                       membro: nextcord.User = nextcord.SlashOption(description="Ver a conta AniList de outro membro do Discord.", required=False),
                       acao: str = nextcord.SlashOption(description="Ação para sua conta.", choices=["vincular", "desvincular"], required=False)):
         await self.invoke(interaction, "anilist", usuario=usuario, membro=membro, acao=acao)
+
+    @nextcord.slash_command(name="e621", description="Pesquise imagens ou vídeos no e621.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def e621(self, interaction: nextcord.Interaction):
+        pass
+
+    @e621.subcommand(name="image", description="Pesquise uma imagem no e621 por tags.")
+    async def e621_image(self, interaction: nextcord.Interaction,
+                         tags: str = nextcord.SlashOption(description="Tags de busca. Ex.: male/male -solo order:score")):
+        await self.invoke(interaction, "e621 image", tags=tags)
+
+    @e621.subcommand(name="video", description="Pesquise um vídeo no e621 por tags.")
+    async def e621_video(self, interaction: nextcord.Interaction,
+                         tags: str = nextcord.SlashOption(description="Tags de busca. Ex.: male/male animation order:score")):
+        await self.invoke(interaction, "e621 video", tags=tags)
+
+    @e621.subcommand(name="top", description="Ranking de tags e artistas mais pesquisados no servidor.")
+    async def e621_top(self, interaction: nextcord.Interaction,
+                       tipo: str = nextcord.SlashOption(
+                           description="Escolha a categoria do ranking (padrão: tudo).",
+                           choices=["tudo", "tags", "artistas"],
+                           default="tudo",
+                           required=False,
+                       )):
+        await self.invoke(interaction, "e621 top", tipo=tipo)
 
 
 def setup(bot):

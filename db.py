@@ -231,6 +231,14 @@ class GuildSettings(Base):
     updated_at = Column(Integer, nullable=True)
 
 
+class E621SearchStat(Base):
+    __tablename__ = "e621_search_stats"
+    guild_id = Column(String, primary_key=True)
+    tag = Column(String, primary_key=True)
+    category = Column(String, primary_key=True, default="tag")  # 'tag' ou 'artist'
+    count = Column(Integer, nullable=False, default=1)
+
+
 class Database:
     def __init__(self, url):
         if url.startswith("postgres://"):
@@ -1184,6 +1192,95 @@ class Database:
 
     def get_quiz_config(self, guild_id):
         return self.quiz_config(guild_id)
+
+    def record_e621_search(self, guild_id, tags=(), artists=()):
+        if not guild_id:
+            return
+        guild_id = str(guild_id)
+        with self.transaction() as session:
+            for tag in tags:
+                tag = str(tag).strip().lower()
+                if not tag:
+                    continue
+                stat = session.scalar(
+                    select(E621SearchStat).where(
+                        E621SearchStat.guild_id == guild_id,
+                        E621SearchStat.tag == tag,
+                        E621SearchStat.category == "tag",
+                    )
+                )
+                if stat:
+                    stat.count += 1
+                else:
+                    session.add(E621SearchStat(guild_id=guild_id, tag=tag, category="tag", count=1))
+
+            for artist in artists:
+                artist = str(artist).strip().lower()
+                if not artist:
+                    continue
+                stat = session.scalar(
+                    select(E621SearchStat).where(
+                        E621SearchStat.guild_id == guild_id,
+                        E621SearchStat.tag == artist,
+                        E621SearchStat.category == "artist",
+                    )
+                )
+                if stat:
+                    stat.count += 1
+                else:
+                    session.add(E621SearchStat(guild_id=guild_id, tag=artist, category="artist", count=1))
+
+    def get_top_e621(self, guild_id, category="tag", limit=10):
+        if not guild_id:
+            return []
+        with self.transaction() as session:
+            stmt = (
+                select(E621SearchStat)
+                .where(
+                    E621SearchStat.guild_id == str(guild_id),
+                    E621SearchStat.category == category,
+                )
+                .order_by(E621SearchStat.count.desc())
+                .limit(limit)
+            )
+            return [(s.tag, s.count) for s in session.scalars(stmt).all()]
+
+    def get_e621_stats_summary(self, guild_id):
+        if not guild_id:
+            return {"total_tags": 0, "total_artists": 0, "distinct_tags": 0, "distinct_artists": 0}
+        with self.transaction() as session:
+            tag_sum = session.scalar(
+                select(func.coalesce(func.sum(E621SearchStat.count), 0))
+                .where(E621SearchStat.guild_id == str(guild_id), E621SearchStat.category == "tag")
+            ) or 0
+            artist_sum = session.scalar(
+                select(func.coalesce(func.sum(E621SearchStat.count), 0))
+                .where(E621SearchStat.guild_id == str(guild_id), E621SearchStat.category == "artist")
+            ) or 0
+            distinct_tags = session.scalar(
+                select(func.count(E621SearchStat.tag))
+                .where(E621SearchStat.guild_id == str(guild_id), E621SearchStat.category == "tag")
+            ) or 0
+            distinct_artists = session.scalar(
+                select(func.count(E621SearchStat.tag))
+                .where(E621SearchStat.guild_id == str(guild_id), E621SearchStat.category == "artist")
+            ) or 0
+            return {
+                "total_tags": int(tag_sum),
+                "total_artists": int(artist_sum),
+                "distinct_tags": int(distinct_tags),
+                "distinct_artists": int(distinct_artists),
+            }
+
+    def reset_e621_stats(self, guild_id):
+        if not guild_id:
+            return
+        with self.transaction() as session:
+            stats = session.scalars(
+                select(E621SearchStat).where(E621SearchStat.guild_id == str(guild_id))
+            ).all()
+            for s in stats:
+                session.delete(s)
 
 
 def get_database_url():
