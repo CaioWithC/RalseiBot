@@ -128,6 +128,11 @@ class SlashCommands(commands.Cog):
     async def sync(self, interaction: nextcord.Interaction):
         await self.invoke(interaction, "sync")
 
+    @nextcord.slash_command(name="ownersay", description="Dono: envia uma mensagem pelo Ralsei em qualquer servidor.",
+                            integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
+    async def ownersay(self, interaction: nextcord.Interaction):
+        await self.invoke(interaction, "ownersay", ephemeral=True)
+
     @nextcord.slash_command(name="send", description="Administrador: envia uma mensagem pelo bot.",
                             contexts=GUILD_ONLY, default_member_permissions=ADMIN)
     async def send(self, interaction: nextcord.Interaction,
