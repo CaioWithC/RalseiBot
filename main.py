@@ -91,7 +91,7 @@ def create_bot():
 
     @bot.command(cls=DualCommand, help="Verifica se o bot está online.")
     async def ping(ctx):
-        await ctx.send("Pong!")
+        await ctx.send("Pong! {latency}ms".format(latency=round(bot.latency * 1000)))
 
     @bot.command(cls=DualCommand, name="help", help="Lista os comandos ou mostra sua ajuda: r.help [comando] ou /help.")
     async def help_command(ctx, *, command: str = None):

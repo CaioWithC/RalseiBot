@@ -337,6 +337,57 @@ class MusicRecommendationTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(EconomyError):
                 await Music.admmusica.callback(cog, ctx, member=bot_target)
 
+    async def test_musica_shows_author_song_when_no_member_specified(self):
+        ctx = SimpleNamespace(
+            author=SimpleNamespace(id=123, mention="<@123>", bot=False),
+            send=AsyncMock(),
+        )
+        cog = Music(None, overrides_path=None)
+        songs = [
+            {"title": "Track 1", "artist": "Artist 1", "album": "Album 1", "spotify_id": ""},
+            {"title": "Track 2", "artist": "Artist 2", "album": "Album 2", "spotify_id": ""},
+        ]
+        with (
+            patch("cogs.music.load_playlist", return_value=songs),
+            patch.object(cog, "lookup_album_art", new=AsyncMock(return_value=None)),
+        ):
+            await Music.musica.callback(cog, ctx)
+
+        ctx.send.assert_awaited_once()
+        embed = ctx.send.call_args.kwargs["embed"]
+        self.assertEqual(embed.title, "🎵 Música do dia")
+        expected_song = cog.get_user_song(123, songs)
+        self.assertIn(f"<@123>, sua recomendação de hoje é **{expected_song['title']}**.", embed.description)
+
+    async def test_musica_shows_mentioned_member_song(self):
+        author = SimpleNamespace(id=123, mention="<@123>", bot=False)
+        target = SimpleNamespace(id=456, mention="<@456>", bot=False)
+        ctx = SimpleNamespace(author=author, send=AsyncMock())
+        cog = Music(None, overrides_path=None)
+        songs = [
+            {"title": "Track 1", "artist": "Artist 1", "album": "Album 1", "spotify_id": ""},
+            {"title": "Track 2", "artist": "Artist 2", "album": "Album 2", "spotify_id": ""},
+        ]
+        with (
+            patch("cogs.music.load_playlist", return_value=songs),
+            patch.object(cog, "lookup_album_art", new=AsyncMock(return_value=None)),
+        ):
+            await Music.musica.callback(cog, ctx, member=target)
+
+        ctx.send.assert_awaited_once()
+        embed = ctx.send.call_args.kwargs["embed"]
+        self.assertEqual(embed.title, "🎵 Música do dia")
+        expected_song = cog.get_user_song(456, songs)
+        self.assertIn(f"A recomendação de hoje de <@456> é **{expected_song['title']}**.", embed.description)
+
+    async def test_musica_rejects_bots(self):
+        bot_target = SimpleNamespace(id=999, mention="<@999>", bot=True)
+        ctx = SimpleNamespace(author=SimpleNamespace(id=123, mention="<@123>", bot=False), send=AsyncMock())
+        cog = Music(None, overrides_path=None)
+        with patch("cogs.music.load_playlist", return_value=[{"title": "A", "artist": "B", "album": "C", "spotify_id": ""}]):
+            with self.assertRaises(EconomyError):
+                await Music.musica.callback(cog, ctx, member=bot_target)
+
     def test_music_override_expires_on_next_day(self):
         cog = Music(None, overrides_path=None)
         songs = [

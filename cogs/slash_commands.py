@@ -213,8 +213,11 @@ class SlashCommands(commands.Cog):
 
     @nextcord.slash_command(name="musica", description="Receba sua música do dia com a capa do álbum.",
                             integration_types=ALL_INSTALLS, contexts=ALL_CONTEXTS)
-    async def musica(self, interaction: nextcord.Interaction):
-        await self.invoke(interaction, "musica")
+    async def musica(self, interaction: nextcord.Interaction,
+                     member: typing.Union[nextcord.Member, nextcord.User] = nextcord.SlashOption(
+                         description="Membro cuja música será exibida (deixe em branco para a sua).",
+                         required=False)):
+        await self.invoke(interaction, "musica", member=member)
 
     @nextcord.slash_command(name="admmusica", description="Administrador: troque a música do dia de um membro ou a sua.",
                             contexts=GUILD_ONLY, default_member_permissions=ADMIN)
