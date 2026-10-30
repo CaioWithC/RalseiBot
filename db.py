@@ -231,6 +231,12 @@ class GuildSettings(Base):
     updated_at = Column(Integer, nullable=True)
 
 
+class E621BlockedTag(Base):
+    __tablename__ = "e621_blocked_tags"
+    guild_id = Column(String, primary_key=True)
+    tag = Column(String, primary_key=True)
+
+
 class E621SearchStat(Base):
     __tablename__ = "e621_search_stats"
     guild_id = Column(String, primary_key=True)
@@ -1271,6 +1277,42 @@ class Database:
                 "distinct_tags": int(distinct_tags),
                 "distinct_artists": int(distinct_artists),
             }
+
+    def add_e621_blocked_tag(self, guild_id, tag):
+        """Block a tag from e621 searches in a guild. Returns True if added, False if already blocked."""
+        if not guild_id or not tag:
+            return False
+        tag = str(tag).strip().lower()
+        with self.transaction() as session:
+            existing = session.get(E621BlockedTag, (str(guild_id), tag))
+            if existing:
+                return False
+            session.add(E621BlockedTag(guild_id=str(guild_id), tag=tag))
+            return True
+
+    def remove_e621_blocked_tag(self, guild_id, tag):
+        """Unblock a tag from e621 searches in a guild. Returns True if removed, False if not found."""
+        if not guild_id or not tag:
+            return False
+        tag = str(tag).strip().lower()
+        with self.transaction() as session:
+            existing = session.get(E621BlockedTag, (str(guild_id), tag))
+            if existing is None:
+                return False
+            session.delete(existing)
+            return True
+
+    def get_e621_blocked_tags(self, guild_id):
+        """Return a sorted list of blocked tags for a guild."""
+        if not guild_id:
+            return []
+        with Session(self.engine) as session:
+            rows = session.scalars(
+                select(E621BlockedTag.tag)
+                .where(E621BlockedTag.guild_id == str(guild_id))
+                .order_by(E621BlockedTag.tag)
+            ).all()
+            return list(rows)
 
     def reset_e621_stats(self, guild_id):
         if not guild_id:
